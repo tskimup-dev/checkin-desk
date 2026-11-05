@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5fbf">
+<meta name="robots" content="noindex">
+<title>참석확인증</title>
+<style>
+  :root{--bg:#f3f5f8;--text:#16202c;--muted:#6b7684;--primary:#1f5fbf;--line:#e2e6ec}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;line-height:1.5}
+  main{max-width:520px;margin:0 auto;padding:20px 16px calc(28px + env(safe-area-inset-bottom));text-align:center}
+  h1{font-size:20px;margin:4px 0 14px}
+  #cert{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:300px}
+  .btn{display:inline-block;margin-top:14px;padding:13px 22px;border-radius:10px;background:var(--primary);color:#fff;font-size:17px;font-weight:600;text-decoration:none;border:0}
+  .muted{color:var(--muted);font-size:14px;margin:10px 0 0}
+  .err{background:#fdecea;color:#b42318;border-radius:10px;padding:16px;text-align:left}
+</style>
+</head>
+<body>
+<main>
+  <h1>참석확인증</h1>
+  <div id="box">
+    <img id="cert" alt="참석확인증">
+    <a id="save" class="btn" download="참석확인증.jpg">이미지로 저장</a>
+    <p class="muted">저장 버튼이 안 되면 확인증 이미지를 <b>길게 눌러 '사진에 저장'</b> 하세요.</p>
+  </div>
+</main>
+<script>
+/* 데스크에서 보여준 QR 안에 확인증 내용이 들어 있습니다. 서버나 명단에는 접근하지 않습니다. */
+const FONT = '"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
+
+function decode(hash) {
+  const b = hash.replace(/^#/, '').replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b + '='.repeat((4 - b.length % 4) % 4));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
+}
+
+function draw(d) {
+  const W = 900, H = 1270;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#1f3a5f';
+  g.lineWidth = 6; g.strokeRect(30, 30, W - 60, H - 60);
+  g.lineWidth = 2; g.strokeRect(46, 46, W - 92, H - 92);
+
+  g.textAlign = 'center'; g.fillStyle = '#111';
+  g.font = `bold 64px ${FONT}`; g.fillText('참 석 확 인 증', W / 2, 190);
+  if (d.r) { g.font = `22px ${FONT}`; g.fillStyle = '#666'; g.fillText('접수번호  ' + d.r, W / 2, 240, W - 160); }
+
+  const rows = [
+    ['성      명', d.n], ['소속기관', d.o], ['과제번호', d.p],
+    ['설 명 회', d.e], ['회      차', d.c], ['일      시', d.d],
+    ['장      소', d.l], ['참석확인', d.t],
+  ].filter(([, v]) => v);
+  g.textAlign = 'left'; g.font = `30px ${FONT}`;
+  rows.forEach(([k, v], i) => {
+    const y = 340 + i * 62;
+    g.fillStyle = '#666'; g.fillText(k, 120, y);
+    g.fillStyle = '#111'; g.fillText(String(v), 300, y, W - 400);
+  });
+
+  g.textAlign = 'center'; g.fillStyle = '#111'; g.font = `30px ${FONT}`;
+  g.fillText('위 사람은 위 설명회에 참석하였음을 확인합니다.', W / 2, 930, W - 160);
+  g.font = `28px ${FONT}`; g.fillText(d.y || '', W / 2, 1070);
+  if (d.i) {
+    g.font = `bold 36px ${FONT}`;
+    const tw = Math.min(g.measureText(d.i).width, W - 300);
+    g.fillText(d.i, W / 2, 1150, W - 300);
+    g.textAlign = 'left'; g.font = `22px ${FONT}`; g.fillStyle = '#555';
+    g.fillText('(직인생략)', W / 2 + tw / 2 + 14, 1148);
+  }
+  return cv.toDataURL('image/jpeg', 0.9);
+}
+
+(async () => {
+  try {
+    const d = decode(location.hash);
+    if (document.fonts) await document.fonts.ready;
+    const url = draw(d);
+    document.getElementById('cert').src = url;
+    const a = document.getElementById('save');
+    a.href = url;
+    a.download = `참석확인증_${(d.n || '').replace(/[\\/:*?"<>|]/g, '')}.jpg`;
+    document.title = `참석확인증 - ${d.n || ''}`;
+  } catch (e) {
+    document.getElementById('box').innerHTML =
+      '<div class="err">확인증 정보를 읽을 수 없습니다. 접수데스크 화면의 QR을 다시 찍어 주세요.</div>';
+  }
+})();
+</script>
+</body>
+</html>

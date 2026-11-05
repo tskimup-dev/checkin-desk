@@ -114,6 +114,10 @@
   .sig-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c3c9d2;font-size:28px;pointer-events:none}
   .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
 
+  .cert-wrap{display:flex;gap:28px;justify-content:center;align-items:center;flex-wrap:wrap}
+  .cert-qr{width:290px}
+  #certQr{display:flex;justify-content:center;min-height:260px;align-items:center}
+  #certQr img,#certQr canvas{border:8px solid #fff;border-radius:6px;box-shadow:0 0 0 1px var(--line)}
   .ok-badge{display:inline-block;background:var(--ok-bg);color:var(--ok);font-weight:700;font-size:20px;padding:10px 18px;border-radius:999px;margin-bottom:16px}
   #certImg{width:100%;max-width:440px;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:200px}
 
@@ -293,8 +297,14 @@
   <section id="view-cert" class="view hidden">
     <div class="card center">
       <div class="ok-badge">✓ 참석이 확인되었습니다</div><br>
-      <img id="certImg" alt="참석확인증">
-      <p class="muted">확인증 화면을 휴대폰으로 촬영해 보관하실 수 있습니다.</p>
+      <div class="cert-wrap">
+        <img id="certImg" alt="참석확인증">
+        <div class="cert-qr">
+          <div style="font-weight:700;font-size:17px">휴대폰으로 확인증 받기</div>
+          <p class="muted" style="margin:4px 0 10px;font-size:14px">휴대폰 카메라로 QR을 찍으면<br>확인증을 저장할 수 있습니다.</p>
+          <div id="certQr"></div>
+        </div>
+      </div>
       <button class="primary big" id="btnNext" type="button">다음 참석자</button>
     </div>
   </section>
@@ -1051,6 +1061,30 @@ async function showCert(rec) {
   const img = $('#certImg');
   img.removeAttribute('src');
   img.src = await drawCertificate(rec);
+  renderCertQr(rec);
+}
+
+// 신청자 휴대폰용 확인증 링크 (확인증 내용만 담음, 서명·직인 제외)
+function certLink(rec) {
+  const s = state.settings, info = sessionInfo(rec.session);
+  const d = { n: rec.name, o: rec.org, p: rec.projectNo, r: rec.receiptNo, c: sessName(rec.session) || rec.session,
+              t: rec.checkinAt, y: fmtKo(new Date(rec.checkinISO)), e: s.eventName, d: info.date, l: info.place, i: s.issuer };
+  Object.keys(d).forEach(k => { if (!d[k]) delete d[k]; });
+  const bytes = new TextEncoder().encode(JSON.stringify(d));
+  const b64 = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+  return base + 'cert.html#' + b64;
+}
+
+async function renderCertQr(rec) {
+  const box = $('#certQr');
+  box.innerHTML = '';
+  try {
+    if (!window.QRCode) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+    new QRCode(box, { text: certLink(rec), width: 260, height: 260, correctLevel: QRCode.CorrectLevel.L });   // 링크가 길어 크게
+  } catch (e) {
+    box.innerHTML = '<p class="muted" style="font-size:14px">QR을 만들지 못했습니다.<br>인터넷 연결을 확인해 주세요.</p>';
+  }
 }
 
 /* ===================== 외부 스크립트 불러오기 ===================== */
