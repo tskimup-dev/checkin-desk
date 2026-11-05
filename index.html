@@ -1004,11 +1004,13 @@ async function drawCertificate(rec) {
   g.fillStyle = '#111'; g.font = `28px ${CERT_FONT}`;
   g.fillText(fmtKo(new Date(rec.checkinISO)), W / 2, 1140);
   if (s.issuer) {
-    g.font = `bold 36px ${CERT_FONT}`; g.fillText(s.issuer, W / 2, 1195, W - 240);
-    if (s.stamp) {
-      const tw = Math.min(g.measureText(s.issuer).width, W - 240);
+    g.font = `bold 36px ${CERT_FONT}`;
+    const tw = Math.min(g.measureText(s.issuer).width, W - 240);
+    if (s.stamp) {                                   // 직인을 먼저 그려서 글씨 뒤로 가게
       try { g.drawImage(await loadImg(s.stamp), W / 2 + tw / 2 - 18, 1135, 82, 82); } catch (e) {}
     }
+    g.fillStyle = '#111';
+    g.fillText(s.issuer, W / 2, 1195, W - 240);
   }
   return cv.toDataURL('image/jpeg', 0.85);
 }
