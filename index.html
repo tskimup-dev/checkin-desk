@@ -116,6 +116,7 @@
 
   .cert-wrap{display:flex;gap:28px;justify-content:center;align-items:center;flex-wrap:wrap}
   .cert-qr{width:290px}
+  @media (max-width:760px){ .cert-qr{order:-1;width:100%} }
   #certQr{display:flex;justify-content:center;min-height:260px;align-items:center}
   #certQr img,#certQr canvas{border:8px solid #fff;border-radius:6px;box-shadow:0 0 0 1px var(--line)}
   .ok-badge{display:inline-block;background:var(--ok-bg);color:var(--ok);font-weight:700;font-size:20px;padding:10px 18px;border-radius:999px;margin-bottom:16px}
@@ -447,6 +448,7 @@
   </div>
 </div>
 
+<script src="qr.js"></script>
 <script>
 /* ===================== 회차 정의 (필요하면 여기만 수정) ===================== */
 const SESSIONS = [
@@ -1079,12 +1081,8 @@ function certLink(rec) {
 async function renderCertQr(rec) {
   const box = $('#certQr');
   box.innerHTML = '';
-  try {
-    if (!window.QRCode) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
-    new QRCode(box, { text: certLink(rec), width: 260, height: 260, correctLevel: QRCode.CorrectLevel.L });   // 링크가 길어 크게
-  } catch (e) {
-    box.innerHTML = '<p class="muted" style="font-size:14px">QR을 만들지 못했습니다.<br>인터넷 연결을 확인해 주세요.</p>';
-  }
+  try { window.QRMini.toCanvas(box, certLink(rec), 260); }            // 사이트 내장 QR 생성기 (인터넷 불필요)
+  catch (e) { box.innerHTML = '<p class="muted" style="font-size:14px">QR을 만들지 못했습니다. 페이지를 새로고침해 주세요.</p>'; }
 }
 
 /* ===================== 외부 스크립트 불러오기 ===================== */
@@ -1619,10 +1617,8 @@ async function showSyncQr() {
     try { await navigator.clipboard.writeText(link); $('#btnCopyLink').textContent = '복사됨'; }
     catch (e) { prompt('아래 링크를 복사하세요', link); }
   };
-  try {
-    if (!window.QRCode) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
-    new QRCode($('#qrBox'), { text: link, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L });
-  } catch (e) { $('#qrBox').innerHTML = '<p class="muted">QR을 만들지 못했습니다(인터넷 필요). 링크 복사를 이용하세요.</p>'; }
+  try { window.QRMini.toCanvas($('#qrBox'), link, 240); }
+  catch (e) { $('#qrBox').innerHTML = '<p class="muted">QR을 만들지 못했습니다. 링크 복사를 이용하세요.</p>'; }
 }
 
 async function handleConnectLink() {

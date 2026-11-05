@@ -1,15 +1,13 @@
 // 오프라인 동작용 서비스 워커
 // index.html을 고친 뒤 다시 올릴 때는 아래 VERSION 숫자를 올려 주세요.
-const VERSION = 'v28';
+const VERSION = 'v29';
 const CACHE = 'checkin-desk-' + VERSION;
-const SHELL = ['./', './index.html', './cert.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
-const QRLIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';   // 확인증·기기 연결 QR
+const SHELL = ['./', './index.html', './cert.html', './qr.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     await c.addAll(SHELL);
-    try { const r = await fetch(QRLIB, { mode: 'cors' }); if (r.ok) await c.put(QRLIB, r); } catch (err) {}   // 오프라인에서도 QR 생성
     self.skipWaiting();
   })());
 });
@@ -46,7 +44,7 @@ self.addEventListener('fetch', e => {
   }
 
   // 아이콘 등: 저장본 우선
-  if (url.origin === location.origin || req.url === QRLIB) {
+  if (url.origin === location.origin) {
     e.respondWith((async () => {
       const hit = await caches.match(req.url);
       if (hit) return hit;
