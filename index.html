@@ -555,7 +555,9 @@ const rosterBase = code => state.applicants.filter(a => isAllowed(a) && a.sessio
 const attendFor = code => [...state.attend.values()].filter(r => r.session === code);
 const allApplicants = () => state.applicants.concat(state.walkins);
 const findApplicant = no => allApplicants().find(a => a.receiptNo === no);
-const sourceLabel = r => r.source === 'walkin' || r.walkin ? '현장 신청' : '타 회차 승인';
+// 참석자 명단 행의 구분: 현장 신청 / 타 회차 승인 (r.walkin은 '명단 밖 추가 행'이라는 뜻이라 구분에 쓰지 않음)
+const isWalkinRow = r => r.source === 'walkin' || (r.rec && r.rec.source === 'walkin') || String((r.a && r.a.receiptNo) || r.receiptNo || '').startsWith('현장-');
+const sourceLabel = r => isWalkinRow(r) ? '현장 신청' : '타 회차 승인';
 
 function beep(ok = true) {
   try {
@@ -1092,7 +1094,7 @@ function renderList() {
     .filter(r => !q || [r.a.name, r.a.org, r.a.specOrg, r.a.receiptNo, r.a.projectNo].some(v => String(v || '').toLowerCase().includes(q)));
 
   $('#listBody').innerHTML = rows.length ? rows.map(r => {
-    const note = !r.walkin ? '' : r.source === 'walkin' ? '<span class="pill warn">현장 신청</span>'
+    const note = !r.walkin ? '' : isWalkinRow(r) ? '<span class="pill warn">현장 신청</span>'
       : `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>`;
     let action = '';
     if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
@@ -1112,7 +1114,7 @@ function exportCsv() {
   if (!all.length) return alert('이 회차의 명단이 없습니다.');
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
   const head = ['No', '참석 회차', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
-  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), r.a.receiptNo, r.source === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.specOrg || '', r.a.projectNo,
+  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), r.a.receiptNo, isWalkinRow(r) ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.specOrg || '', r.a.projectNo,
     normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' (관리자 승인)' : '', r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
