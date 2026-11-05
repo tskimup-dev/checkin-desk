@@ -217,7 +217,7 @@
       <h1>참석 확인</h1>
       <p class="muted">접수번호 또는 휴대폰번호를 입력하세요.</p>
       <form id="lookupForm" class="lookup" autocomplete="off">
-        <input id="q" placeholder="접수번호 또는 휴대폰번호" inputmode="text">
+        <input id="q" placeholder="접수번호 또는 휴대폰번호(- 없이)" inputmode="text">
         <button class="primary" type="submit">조회</button>
       </form>
       <div id="lookupMsg"></div>
@@ -236,7 +236,7 @@
       <p class="muted" style="margin:0 0 14px">사전 신청 내역이 없는 분은 아래 정보를 입력해 주세요. 관리자 승인 후 참석 확인이 진행됩니다.</p>
       <div class="grid">
         <label>성명 *<input id="wName" autocomplete="off"></label>
-        <label>휴대폰번호 *<input id="wPhone" inputmode="tel" autocomplete="off" placeholder="010-1234-5678"></label>
+        <label>휴대폰번호 *<input id="wPhone" inputmode="numeric" autocomplete="off" placeholder="01012345678 (- 없이)"></label>
         <label>연구개발기관명 *<input id="wOrg" autocomplete="off"></label>
         <label>과제번호 (선택)<input id="wProject" autocomplete="off"></label>
       </div>
@@ -779,7 +779,7 @@ async function submitWalkin() {
   // 이미 사전 신청(CONFIRMED)한 사람이면 일반 조회로 안내
   if (state.applicants.some(a => isAllowed(a) && normPhone(a.phone) === p)) {
     go('view-lookup');
-    $('#q').value = formatPhone(phone);
+    $('#q').value = p;
     lookupMsg('이미 사전 신청 내역이 있습니다. 아래에서 확인해 주세요.', 'warn');
     return setTimeout(() => handleQuery(p), 600);
   }
@@ -788,7 +788,7 @@ async function submitWalkin() {
   if (dup) return openApplicant(dup);
 
   const a = {
-    receiptNo: nextWalkinNo(), name, org, projectNo, phone: formatPhone(phone),
+    receiptNo: nextWalkinNo(), name, org, projectNo, phone: normPhone(phone),   // 시트와 같은 형식(숫자만)
     status: 'CONFIRMED', session: t, walkin: true,
     createdAt: fmt(new Date()), desk: state.settings.desk || '',
   };
@@ -1083,7 +1083,7 @@ function exportCsv() {
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
   const head = ['No', '참석 회차', '접수번호', '신청 회차', '성명', '연구개발기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
   const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), r.a.receiptNo, r.source === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.projectNo,
-    formatPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' (관리자 승인)' : '', r.rec ? r.rec.desk : '']);
+    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' (관리자 승인)' : '', r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 }
@@ -1306,30 +1306,6 @@ async function loadStamp(file) {
   $('#stampPreview').classList.remove('hidden');
   await saveSettingsDb(); pushSettings();
 }
-
-/* ===================== 휴대폰번호 자동 하이픈 ===================== */
-function hyphenPhone(v, final = false) {
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length < 4) return d;
-  if (d.length < 8) return `${d.slice(0, 3)}-${d.slice(3)}`;
-  if (final && d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;   // 011-123-4567 등
-  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
-}
-function attachPhoneFormat(el, onlyIfNumeric) {
-  el.addEventListener('input', () => {
-    const v = el.value;
-    if (onlyIfNumeric && !/^[\d\s-]*$/.test(v)) return;   // 영문이 섞이면 접수번호로 보고 그대로 둠
-    if (!/^0/.test(v.replace(/\D/g, '')) && onlyIfNumeric) return;   // 0으로 시작하는 숫자만 휴대폰번호로 처리
-    const f = hyphenPhone(v);
-    if (f !== v) el.value = f;
-  });
-  el.addEventListener('blur', () => {
-    if (onlyIfNumeric && !/^0[\d-]*$/.test(el.value.trim())) return;
-    if (el.value.trim()) el.value = hyphenPhone(el.value, true);
-  });
-}
-attachPhoneFormat($('#q'), true);
-attachPhoneFormat($('#wPhone'), false);
 
 /* ===================== 이벤트 연결 ===================== */
 $('#lookupForm').addEventListener('submit', e => { e.preventDefault(); handleQuery($('#q').value); });
