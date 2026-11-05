@@ -557,7 +557,8 @@ const allApplicants = () => state.applicants.concat(state.walkins);
 const findApplicant = no => allApplicants().find(a => a.receiptNo === no);
 // 참석자 명단 행의 구분: 현장 신청 / 타 회차 승인 (r.walkin은 '명단 밖 추가 행'이라는 뜻이라 구분에 쓰지 않음)
 const isWalkinRow = r => r.source === 'walkin' || (r.rec && r.rec.source === 'walkin') || String((r.a && r.a.receiptNo) || r.receiptNo || '').startsWith('현장-');
-const sourceLabel = r => isWalkinRow(r) ? '현장 신청' : '타 회차 승인';
+const sourceLabel = r => isWalkinRow(r) ? '현장 신청'
+  : `타 회차 승인 (원래 신청: ${sessName(r.a ? r.a.session : r.appliedSession) || '회차 미확인'})`;
 
 function beep(ok = true) {
   try {
@@ -1115,7 +1116,7 @@ function exportCsv() {
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
   const head = ['No', '참석 회차', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
   const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), r.a.receiptNo, isWalkinRow(r) ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.specOrg || '', r.a.projectNo,
-    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' (관리자 승인)' : '', r.rec ? r.rec.desk : '']);
+    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' · 관리자 승인' : '', r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 }

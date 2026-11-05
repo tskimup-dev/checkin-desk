@@ -20,7 +20,7 @@ const TABLES = {
     cols: ['id', '회차', '접수번호', '성명', '기관', '과제번호', '휴대폰번호', '참석시각', '데스크', '구분'],
     idOf: r => r.id,
     row: r => [r.id, r.session, r.receiptNo, r.name, r.org, r.projectNo, r.phone, r.checkinAt, r.desk,
-               r.source === 'walkin' ? '현장 신청' : r.source === 'other' ? '타 회차 승인' : '사전 신청'],
+               r.source === 'walkin' ? '현장 신청' : r.source === 'other' ? '타 회차 승인 (원래 신청: ' + (r.appliedSession || '미확인') + ')' : '사전 신청'],
   },
   approvals: {
     name: '승인',
