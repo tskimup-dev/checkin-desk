@@ -1,0 +1,1258 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5fbf">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="접수데스크">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>설명회 접수데스크</title>
+<style>
+  :root{
+    --bg:#f3f5f8; --card:#fff; --line:#e2e6ec; --text:#16202c; --muted:#6b7684;
+    --primary:#1f5fbf; --primary-ink:#fff; --primary-bg:#eaf1fc;
+    --ok:#17794a; --ok-bg:#e6f5ec; --warn:#8a5a00; --warn-bg:#fff4d6; --err:#b42318; --err-bg:#fdecea;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;font-size:16px;line-height:1.5}
+  button,input,textarea,select{font:inherit;color:inherit}
+  button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 16px;cursor:pointer}
+  button:hover{background:#f7f8fa}
+  button.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
+  button.primary:hover{filter:brightness(1.07)}
+  button.danger{color:var(--err);border-color:#f3c2bd}
+  button.big{font-size:20px;padding:14px 28px}
+  button.small{padding:5px 10px;font-size:14px}
+  button:disabled{opacity:.55;cursor:default}
+  input,textarea,select{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff;width:100%}
+  input:focus,textarea:focus,select:focus{outline:2px solid #b7cdf0;border-color:var(--primary)}
+  .hidden{display:none!important}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+
+  header.top{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:14px;padding:10px 20px;flex-wrap:wrap}
+  .brand{flex:1;min-width:180px}
+  #hdrEvent{font-weight:700;font-size:18px}
+  #hdrSub{font-size:13px;color:var(--muted)}
+  #sessPill{background:var(--primary-bg);border-color:#c6d8f3;color:var(--primary);font-size:15px}
+  #sessPill b{font-size:17px}
+  .stats{font-size:15px;color:var(--muted)}
+  .stats b{color:var(--text);font-size:18px}
+  nav{display:flex;gap:6px;flex-wrap:wrap}
+  nav button.active{background:var(--primary-bg);border-color:#c6d8f3;color:var(--primary);font-weight:600}
+  .badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--err);color:#fff;font-size:12px;line-height:20px;text-align:center;margin-left:4px}
+  .badge:empty,.badge[data-n="0"]{display:none}
+
+  main{max-width:900px;margin:24px auto;padding:0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;margin-bottom:16px}
+  h1{font-size:26px;margin:0 0 6px}
+  h2{font-size:18px;margin:0 0 8px}
+
+  .sess-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:16px}
+  .sess-card{text-align:left;padding:18px;border-radius:14px;border:2px solid var(--line);display:flex;flex-direction:column;gap:4px}
+  .sess-card:hover{border-color:#9dbbe8;background:#fafcff}
+  .sess-card.current{border-color:var(--primary);background:var(--primary-bg)}
+  .sess-name{font-size:24px;font-weight:700}
+  .sess-code{font-size:13px;color:var(--muted);letter-spacing:.05em}
+  .sess-meta{font-size:14px;color:var(--muted);min-height:42px}
+  .sess-count{font-size:15px;font-weight:600;color:var(--primary)}
+
+  .lookup{display:flex;gap:8px;max-width:560px;margin:20px auto 12px}
+  .lookup input{font-size:20px;padding:14px 16px}
+  .lookup button{font-size:18px;white-space:nowrap}
+  .scan{position:relative;max-width:420px;margin:12px auto;border-radius:12px;overflow:hidden;background:#000}
+  .scan video{width:100%;display:block}
+  .scan-frame{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.85);border-radius:12px;pointer-events:none}
+  .scan button{position:absolute;bottom:10px;left:50%;transform:translateX(-50%)}
+  .now-sess{display:inline-block;background:var(--primary-bg);color:var(--primary);font-weight:700;border-radius:999px;padding:6px 16px;margin-bottom:8px}
+
+  .msg{margin-top:14px;padding:14px 16px;border-radius:10px;text-align:left}
+  .msg:empty{display:none}
+  .msg.ok{background:var(--ok-bg);color:var(--ok)}
+  .msg.warn{background:var(--warn-bg);color:var(--warn)}
+  .msg.err{background:var(--err-bg);color:var(--err)}
+  .msg .choice{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(0,0,0,.06)}
+  .msg .choice:first-of-type{border-top:0}
+  .msg .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+  .who{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .who .name{font-size:28px;font-weight:700}
+  .who .org{font-size:18px;color:var(--muted)}
+  dl.kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;margin:0 0 8px;font-size:15px}
+  dl.kv dt{color:var(--muted)}
+  dl.kv dd{margin:0;font-weight:600;word-break:break-all}
+  .sig-label{margin:18px 0 8px;font-weight:600}
+  .sig-wrap{position:relative;border:2px dashed #b9c2cf;border-radius:12px;background:#fff}
+  #sigPad{display:block;width:100%;aspect-ratio:2/1;touch-action:none;cursor:crosshair}
+  .sig-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c3c9d2;font-size:28px;pointer-events:none}
+  .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+
+  .ok-badge{display:inline-block;background:var(--ok-bg);color:var(--ok);font-weight:700;font-size:20px;padding:10px 18px;border-radius:999px;margin-bottom:16px}
+  #certImg{width:100%;max-width:440px;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:200px}
+
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .toolbar select{width:auto;min-width:160px;font-weight:600}
+  .toolbar input{max-width:240px;margin-left:auto}
+  .tabs{display:flex;gap:6px}
+  .tabs button.active{background:var(--primary);border-color:var(--primary);color:#fff}
+  .table-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:10px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:middle}
+  th{background:#f7f8fa;position:sticky;top:0;z-index:1}
+  td.sig{width:130px;height:46px;padding:2px 6px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+  td.sig img{height:40px;display:block}
+  td.empty{text-align:center;color:var(--muted);padding:24px}
+  tr.absent td{color:#8a94a3}
+  .pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+  .pill.ok{background:var(--ok-bg);color:var(--ok)}
+  .pill.no{background:#eef0f3;color:#6b7684}
+  .pill.warn{background:var(--warn-bg);color:var(--warn)}
+  .pill.err{background:var(--err-bg);color:var(--err)}
+
+  .ap-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;background:#fffdf5}
+  .ap-card .nm{font-size:18px;font-weight:700}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .grid label,.form-label{font-size:14px;color:var(--muted);display:block}
+  .grid label input,.grid label select{margin-top:4px;color:var(--text)}
+  .sess-info{display:grid;grid-template-columns:110px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
+  .sess-info b{font-size:15px}
+  .row{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+  #stampPreview{width:64px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
+  textarea{margin-top:10px;font-size:13px;font-family:ui-monospace,Consolas,monospace}
+
+  .modal{position:fixed;inset:0;background:rgba(15,23,35,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .modal-card{background:#fff;border-radius:14px;padding:24px;width:100%;max-width:380px}
+  .modal-card input{font-size:22px;letter-spacing:.3em;text-align:center;margin-top:10px}
+
+  body{padding-bottom:env(safe-area-inset-bottom)}
+  html{-webkit-text-size-adjust:100%}
+  button,.sess-card{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  @media (max-width:600px){
+    header.top{position:static;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));gap:8px}
+    .brand{min-width:0;flex-basis:100%}
+    nav{width:100%}
+    nav button{flex:1;padding:9px 4px;font-size:13px;white-space:nowrap}
+    #sessPill{flex:1}
+    main{margin:12px auto;padding:0 10px}
+    h1{font-size:22px}
+    .sess-grid{grid-template-columns:1fr 1fr}
+    .sess-name{font-size:20px}
+    .actions button{flex:1}
+    #btnSubmit{flex-basis:100%}
+    .card{padding:16px}
+    .lookup{flex-direction:column}
+    dl.kv{grid-template-columns:96px 1fr}
+    .sess-info{grid-template-columns:1fr}
+    .toolbar input{margin-left:0;max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div id="hdrEvent">설명회 접수데스크</div>
+    <div id="hdrSub"></div>
+  </div>
+  <button type="button" id="sessPill" data-go="view-session">📍 <b id="sessPillName">회차 선택</b> · 변경</button>
+  <div class="stats">출석 <b id="cntIn">0</b> / 대상 <b id="cntAll">0</b></div>
+  <nav>
+    <button type="button" data-go="view-lookup">접수</button>
+    <button type="button" data-go="view-list">출석부</button>
+    <button type="button" data-go="view-approve" data-admin="승인 관리 화면을 엽니다.">승인 관리<span class="badge" id="apBadge" data-n="0"></span></button>
+    <button type="button" data-go="view-setup" data-admin="설정 화면을 엽니다.">설정</button>
+    <button type="button" id="btnLock" class="hidden">🔒 잠금</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 0. 회차 선택 -->
+  <section id="view-session" class="view hidden">
+    <div class="card">
+      <h1>설명회 회차 선택</h1>
+      <p class="muted" style="margin:0">접수를 받을 회차를 선택하세요. 회차 선택은 관리자 비밀번호가 필요합니다.</p>
+      <div class="sess-grid" id="sessGrid"></div>
+    </div>
+  </section>
+
+  <!-- 1. 조회 -->
+  <section id="view-lookup" class="view hidden">
+    <div class="card center">
+      <div class="now-sess" id="lookupSess"></div>
+      <h1>참석 확인</h1>
+      <p class="muted">접수번호 또는 휴대폰번호를 입력하거나 QR을 스캔하세요.</p>
+      <form id="lookupForm" class="lookup" autocomplete="off">
+        <input id="q" placeholder="접수번호 또는 휴대폰번호" inputmode="text">
+        <button class="primary" type="submit">조회</button>
+      </form>
+      <button id="btnScan" type="button">📷 카메라로 QR 스캔</button>
+      <div id="scanBox" class="scan hidden">
+        <video id="video" playsinline muted></video>
+        <div class="scan-frame"></div>
+        <button id="btnStopScan" type="button">스캔 중지</button>
+      </div>
+      <div id="lookupMsg"></div>
+    </div>
+  </section>
+
+  <!-- 2. 확인 + 서명 -->
+  <section id="view-confirm" class="view hidden">
+    <div class="card">
+      <div id="confirmInfo"></div>
+      <div id="confirmWarn"></div>
+      <div class="sig-label">아래 칸에 서명해 주세요</div>
+      <div class="sig-wrap">
+        <canvas id="sigPad"></canvas>
+        <span class="sig-hint" id="sigHint">여기에 서명</span>
+      </div>
+      <div id="confirmMsg"></div>
+      <div class="actions">
+        <button type="button" id="btnBack">취소</button>
+        <button type="button" id="btnClear">다시 쓰기</button>
+        <button type="button" class="primary big" id="btnSubmit">참석 확인</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 확인증 -->
+  <section id="view-cert" class="view hidden">
+    <div class="card center">
+      <div class="ok-badge">✓ 참석이 확인되었습니다</div><br>
+      <img id="certImg" alt="참석확인증">
+      <p class="muted">확인증 화면을 휴대폰으로 촬영해 보관하실 수 있습니다.</p>
+      <button class="primary big" id="btnNext" type="button">다음 참석자</button>
+    </div>
+  </section>
+
+  <!-- 4. 출석부 -->
+  <section id="view-list" class="view hidden">
+    <div class="card">
+      <div class="toolbar">
+        <select id="listSession"></select>
+        <div class="tabs">
+          <button type="button" data-filter="all">전체 <span id="fAll">0</span></button>
+          <button type="button" data-filter="in">출석 <span id="fIn">0</span></button>
+          <button type="button" data-filter="out">미출석 <span id="fOut">0</span></button>
+        </div>
+        <input id="listSearch" placeholder="이름·기관·접수번호 검색">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>No</th><th>성명</th><th>기관</th><th>접수번호</th><th>출석</th><th>서명</th><th>비고</th><th></th></tr></thead>
+          <tbody id="listBody"></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button type="button" id="btnCsv">출석부 CSV 저장</button>
+        <button type="button" id="btnRoster">서명 출석부 저장</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 승인 관리 -->
+  <section id="view-approve" class="view hidden">
+    <div class="card">
+      <h2>승인 대기 · <span id="apSession"></span></h2>
+      <p class="muted" style="margin:0 0 12px">다른 회차 신청자가 현재 회차에 참석하려고 요청한 목록입니다. 승인 후 [서명 진행]으로 바로 접수할 수 있습니다.</p>
+      <div id="apPending"></div>
+    </div>
+    <div class="card">
+      <h2>처리 내역</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>성명</th><th>기관</th><th>접수번호</th><th>신청 회차</th><th>결과</th><th>처리 시각</th><th></th></tr></thead>
+          <tbody id="apDone"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. 설정 -->
+  <section id="view-setup" class="view hidden">
+    <div class="card">
+      <h2>1. 신청자 명단 불러오기</h2>
+      <p class="muted" style="margin:0">
+        구글 시트에서 <b>파일 → 다운로드 → CSV</b>로 받은 파일을 선택하거나, 시트에서 <b>머리글 포함</b> 범위를 복사해 아래에 붙여넣으세요.<br>
+        필수 열: 접수번호, 성명, 상태(status) · 선택 열: 신청 회차, 과제번호, 연구개발기관명, 휴대폰번호<br>
+        상태가 <b>CONFIRMED</b>인 신청자만 참석 확인할 수 있습니다. 회차는 접수번호의 <b>S001~S004</b>로 자동 구분합니다.
+      </p>
+      <div class="row"><input type="file" id="csvFile" accept=".csv,.tsv,.txt" style="max-width:360px"></div>
+      <textarea id="pasteBox" rows="6" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+      <div class="actions">
+        <button type="button" class="danger" id="btnClearApplicants">명단 삭제</button>
+        <button type="button" class="primary" id="btnImport">명단 적용</button>
+      </div>
+      <div id="importInfo"></div>
+    </div>
+
+    <div class="card">
+      <h2>2. 설명회 정보 (확인증에 표시)</h2>
+      <div class="grid">
+        <label>설명회명<input id="sEventName"></label>
+        <label>발급 명의<input id="sIssuer" placeholder="○○재단 이사장"></label>
+        <label>데스크 이름<input id="sDesk" placeholder="데스크1"></label>
+      </div>
+      <div style="margin-top:16px" class="form-label">회차별 일시 · 장소</div>
+      <div id="sessInfoForm"></div>
+      <div class="row">
+        <img id="stampPreview" alt="" class="hidden">
+        <label class="form-label">직인 이미지 (PNG 권장)
+          <input type="file" id="stampFile" accept="image/*" style="max-width:300px;margin-top:4px">
+        </label>
+        <button type="button" class="small" id="btnStampDel">직인 삭제</button>
+      </div>
+      <div class="row">
+        <label class="form-label" style="max-width:280px;width:100%">관리자 비밀번호 변경 (숫자 4자리 이상)
+          <input type="password" id="sPinNew" inputmode="numeric" autocomplete="new-password" placeholder="변경할 때만 입력" style="margin-top:4px">
+        </label>
+      </div>
+      <div class="actions">
+        <button type="button" class="primary" id="btnSaveSettings">설정 저장</button>
+      </div>
+      <div id="settingsMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>3. 데이터 정리</h2>
+      <p class="muted" style="margin:0">행사 후 출석부를 저장한 뒤 이 기기의 기록을 지우세요.</p>
+      <div class="actions" style="justify-content:flex-start">
+        <button type="button" class="danger" id="btnReset">출석·승인 기록 전체 초기화</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 관리자 비밀번호 창 -->
+<div id="pinModal" class="modal hidden">
+  <div class="modal-card">
+    <h2 id="pinTitle">관리자 확인</h2>
+    <p id="pinDesc" class="muted" style="margin:0"></p>
+    <input type="password" id="pinInput" inputmode="numeric" autocomplete="off">
+    <input type="password" id="pinInput2" inputmode="numeric" autocomplete="off" placeholder="한 번 더 입력" class="hidden">
+    <div id="pinMsg"></div>
+    <div class="actions">
+      <button type="button" id="pinCancel">취소</button>
+      <button type="button" class="primary" id="pinOk">확인</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== 회차 정의 (필요하면 여기만 수정) ===================== */
+const SESSIONS = [
+  { code: 'S001', name: '대전 1차' },
+  { code: 'S002', name: '대전 2차' },
+  { code: 'S003', name: '부산 1차' },
+  { code: 'S004', name: '부산 2차' },
+];
+const ADMIN_UNLOCK_MS = 5 * 60 * 1000;   // 관리자 인증 유지 시간 (5분)
+
+/* ===================== 저장소 (IndexedDB) ===================== */
+const DB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('checkin-desk', 2);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv');
+        if (!d.objectStoreNames.contains('attend')) d.createObjectStore('attend', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('approvals')) d.createObjectStore('approvals', { keyPath: 'id' });
+      };
+      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  tx(store, mode, fn) {
+    return new Promise((res, rej) => {
+      if (!this.db) return rej(new Error('DB not open'));
+      const t = this.db.transaction(store, mode);
+      const req = fn(t.objectStore(store));
+      t.oncomplete = () => res(req ? req.result : undefined);
+      t.onerror = () => rej(t.error);
+    });
+  },
+  get(k)          { return this.tx('kv', 'readonly', s => s.get(k)); },
+  set(k, v)       { return this.tx('kv', 'readwrite', s => s.put(v, k)); },
+  del(k)          { return this.tx('kv', 'readwrite', s => s.delete(k)); },
+  put(store, v)   { return this.tx(store, 'readwrite', s => s.put(v)); },
+  remove(store,k) { return this.tx(store, 'readwrite', s => s.delete(k)); },
+  all(store)      { return this.tx(store, 'readonly', s => s.getAll()); },
+  clear(store)    { return this.tx(store, 'readwrite', s => s.clear()); },
+};
+
+/* ===================== 상태 ===================== */
+const DEFAULT_SETTINGS = {
+  eventName: '2026 연구개발사업 설명회', issuer: '', desk: '데스크1',
+  session: '', sessionInfo: {}, stamp: '', adminPin: ''
+};
+const state = {
+  applicants: [],
+  attend: new Map(),      // id = 회차|접수번호
+  approvals: new Map(),   // id = 회차|접수번호
+  settings: { ...DEFAULT_SETTINGS },
+  current: null,          // { a, approved }
+  view: '',
+  listSession: '',
+  listFilter: 'all',
+  adminUntil: 0,
+};
+
+/* ===================== 유틸 ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad2 = n => String(n).padStart(2, '0');
+const fmt = d => `${d.getFullYear()}.${pad2(d.getMonth()+1)}.${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+const fmtKo = d => `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`;
+const fileStamp = () => { const d = new Date(); return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}_${pad2(d.getHours())}${pad2(d.getMinutes())}`; };
+
+const key = (session, no) => `${session}|${no}`;
+const today = () => state.settings.session || '';
+const sessName = code => (SESSIONS.find(s => s.code === code) || {}).name || '';
+const sessLabel = code => code ? `${sessName(code) || code} (${code})` : '회차 미확인';
+const sessionInfo = code => (state.settings.sessionInfo || {})[code] || {};
+
+function detectSession(receiptNo, text) {
+  const m = String(receiptNo || '').toUpperCase().match(/S\d{3}/);
+  if (m && SESSIONS.some(s => s.code === m[0])) return m[0];
+  const t = String(text || '').replace(/\s/g, '');
+  const m2 = t.toUpperCase().match(/S\d{3}/);
+  if (m2 && SESSIONS.some(s => s.code === m2[0])) return m2[0];
+  for (const s of SESSIONS) {                       // "1차 대전", "대전1차" 등 글자로 된 회차
+    const [city, num] = s.name.split(' ');
+    if (t.includes(city) && t.includes(num)) return s.code;
+  }
+  return '';
+}
+
+function normPhone(p) {
+  let d = String(p || '').replace(/\D/g, '');
+  if (d.startsWith('82') && d.length >= 11) d = '0' + d.slice(2);
+  if (/^1\d{8,9}$/.test(d)) d = '0' + d;          // 시트에서 앞자리 0이 빠진 경우
+  return d;
+}
+function formatPhone(p) {
+  const d = normPhone(p);
+  if (d.length === 11) return `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`;
+  if (d.length === 10) return `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`;
+  return p || '';
+}
+function maskPhone(p) {
+  const d = normPhone(p);
+  return d.length >= 10 ? `${d.slice(0,3)}-****-${d.slice(-4)}` : (p || '');
+}
+
+const statusOf = a => String(a.status || '').trim().toUpperCase();
+const isAllowed = a => statusOf(a) === 'CONFIRMED';            // CONFIRMED만 참석 가능
+const rosterBase = code => state.applicants.filter(a => isAllowed(a) && a.session === code);
+const attendFor = code => [...state.attend.values()].filter(r => r.session === code);
+const findApplicant = no => state.applicants.find(a => a.receiptNo === no);
+
+function beep(ok = true) {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = ok ? 880 : 220; g.gain.value = 0.08;
+    o.connect(g); g.connect(ac.destination); o.start();
+    setTimeout(() => { o.stop(); ac.close(); }, ok ? 120 : 300);
+  } catch (e) {}
+}
+
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+const saveSettingsDb = () => DB.set('settings', state.settings).catch(() => {});
+
+/* ===================== 관리자 비밀번호 ===================== */
+const isUnlocked = () => Date.now() < state.adminUntil;
+function refreshAdminUi() { $('#btnLock').classList.toggle('hidden', !isUnlocked()); }
+setInterval(refreshAdminUi, 10000);
+
+// force=true면 잠금 해제 상태와 관계없이 항상 비밀번호를 다시 묻습니다 (삭제·초기화용)
+function askPin(reason, force = false) {
+  if (!force && isUnlocked()) { state.adminUntil = Date.now() + ADMIN_UNLOCK_MS; return Promise.resolve(true); }
+  return new Promise(resolve => {
+    const setMode = !state.settings.adminPin;
+    $('#pinTitle').textContent = setMode ? '관리자 비밀번호 설정' : '관리자 확인';
+    $('#pinDesc').textContent = setMode
+      ? '처음 사용하는 관리자 기능입니다. 사용할 비밀번호(숫자 4자리 이상)를 정해 주세요.'
+      : (reason || '관리자 비밀번호를 입력하세요.');
+    $('#pinInput').value = ''; $('#pinInput2').value = ''; $('#pinMsg').innerHTML = '';
+    $('#pinInput2').classList.toggle('hidden', !setMode);
+    $('#pinModal').classList.remove('hidden');
+    setTimeout(() => $('#pinInput').focus(), 30);
+
+    const err = m => { $('#pinMsg').innerHTML = `<div class="msg err">${esc(m)}</div>`; };
+    const close = ok => {
+      $('#pinModal').classList.add('hidden');
+      $('#pinOk').onclick = $('#pinCancel').onclick = $('#pinInput').onkeydown = $('#pinInput2').onkeydown = null;
+      if (ok) state.adminUntil = Date.now() + ADMIN_UNLOCK_MS;
+      refreshAdminUi();
+      resolve(ok);
+    };
+    const ok = async () => {
+      const v = $('#pinInput').value.trim();
+      if (setMode) {
+        if (!/^\d{4,}$/.test(v)) return err('숫자 4자리 이상으로 입력하세요.');
+        if (v !== $('#pinInput2').value.trim()) return err('두 번 입력한 비밀번호가 다릅니다.');
+        state.settings.adminPin = v; await saveSettingsDb();
+        return close(true);
+      }
+      if (v === state.settings.adminPin) return close(true);
+      $('#pinInput').value = ''; err('비밀번호가 맞지 않습니다.');
+    };
+    const onKey = e => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') close(false); };
+    $('#pinOk').onclick = ok; $('#pinCancel').onclick = () => close(false);
+    $('#pinInput').onkeydown = onKey; $('#pinInput2').onkeydown = onKey;
+  });
+}
+
+/* ===================== 화면 전환 ===================== */
+function go(id) {
+  stopScan();
+  state.view = id;
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('hidden', v.id !== id));
+  const navOf = { 'view-confirm': 'view-lookup', 'view-cert': 'view-lookup' };
+  document.querySelectorAll('nav [data-go]').forEach(b => b.classList.toggle('active', b.dataset.go === (navOf[id] || id)));
+  if (id === 'view-session') renderSessionPicker();
+  if (id === 'view-lookup') setTimeout(() => $('#q').focus(), 50);
+  if (id === 'view-list') { if (!state.listSession) state.listSession = today() || SESSIONS[0].code; renderList(); }
+  if (id === 'view-approve') renderApprovals();
+  if (id === 'view-setup') { fillSettingsForm(); showImportInfo(); }
+  window.scrollTo(0, 0);
+}
+
+function refreshHeader() {
+  const s = state.settings, t = today();
+  $('#hdrEvent').textContent = s.eventName || '설명회 접수데스크';
+  $('#hdrSub').textContent = s.desk || '';
+  $('#sessPillName').textContent = t ? sessName(t) : '회차 선택';
+  $('#lookupSess').textContent = t ? `현재 회차 · ${sessLabel(t)}` : '회차가 선택되지 않았습니다';
+  $('#cntIn').textContent = t ? attendFor(t).length : 0;
+  $('#cntAll').textContent = t ? rosterBase(t).length : 0;
+  const pending = [...state.approvals.values()].filter(x => x.session === t && x.status === 'pending').length;
+  $('#apBadge').textContent = pending || ''; $('#apBadge').dataset.n = pending;
+  document.title = `${t ? sessName(t) + ' - ' : ''}${s.eventName || '접수데스크'}`;
+}
+
+/* ===================== 회차 선택 ===================== */
+function renderSessionPicker() {
+  $('#sessGrid').innerHTML = SESSIONS.map(s => {
+    const info = sessionInfo(s.code);
+    return `<button type="button" class="sess-card ${s.code === today() ? 'current' : ''}" data-pick-session="${s.code}">
+      <span class="sess-name">${esc(s.name)}</span>
+      <span class="sess-code">${s.code}${s.code === today() ? ' · 현재 회차' : ''}</span>
+      <span class="sess-meta">${esc(info.date || '일시 미입력')}<br>${esc(info.place || '')}</span>
+      <span class="sess-count">출석 ${attendFor(s.code).length} / 대상 ${rosterBase(s.code).length}</span>
+    </button>`;
+  }).join('');
+}
+
+async function pickSession(code) {
+  if (!await askPin(`${sessLabel(code)} 회차로 접수를 시작합니다.`)) return;
+  state.settings.session = code;
+  await saveSettingsDb();
+  state.listSession = code;
+  refreshHeader();
+  lookupMsg('');
+  go('view-lookup');
+}
+
+/* ===================== 조회 ===================== */
+function lookupMsg(html, type = 'err') {
+  $('#lookupMsg').innerHTML = html ? `<div class="msg ${type}">${html}</div>` : '';
+}
+
+function extractQuery(raw) {
+  let s = String(raw || '').trim();
+  if (/^https?:\/\//i.test(s)) {           // QR이 주소 형태인 경우 (?no=접수번호)
+    try {
+      const u = new URL(s);
+      s = u.searchParams.get('no') || u.searchParams.get('receiptNo') || u.searchParams.get('phone') || s;
+    } catch (e) {}
+  }
+  return s.trim();
+}
+
+function handleQuery(raw) {
+  const q = extractQuery(raw);
+  if (!q) return;
+  if (!today()) return go('view-session');
+  if (!state.applicants.length) return lookupMsg('신청자 명단이 없습니다. [설정]에서 명단을 먼저 불러오세요.');
+
+  let matches = state.applicants.filter(a => a.receiptNo.toLowerCase() === q.toLowerCase());
+  if (!matches.length) {
+    const p = normPhone(q);
+    if (p.length >= 10) matches = state.applicants.filter(a => normPhone(a.phone) === p);
+  }
+  matches = matches.filter(isAllowed);                 // CONFIRMED만 화면에 표시
+
+  if (!matches.length) {
+    beep(false);
+    return lookupMsg(`<b>${esc(q)}</b> — 참석 확인이 가능한 신청 내역이 없습니다. 번호를 다시 확인해 주세요.`);
+  }
+  if (matches.length === 1) return openApplicant(matches[0]);
+
+  const t = today();
+  matches.sort((a, b) => (b.session === t) - (a.session === t));
+  lookupMsg(`<div style="margin-bottom:6px"><b>여러 건이 조회되었습니다.</b> 해당 신청을 선택하세요.</div>` +
+    matches.map(a => `
+      <div class="choice">
+        <div><b>${esc(a.name)}</b> · ${esc(a.org)}<br>
+          <span class="muted" style="font-size:14px">${esc(a.receiptNo)} · ${esc(sessLabel(a.session))}${a.session !== t ? ' · 타 회차' : ''}${state.attend.has(key(t, a.receiptNo)) ? ' · 출석완료' : ''}</span></div>
+        <button type="button" class="small" data-open="${esc(a.receiptNo)}">선택</button>
+      </div>`).join(''), 'warn');
+}
+
+function openApplicant(a) {
+  const t = today();
+  if (!t) return go('view-session');
+  if (!isAllowed(a)) { beep(false); go('view-lookup'); return lookupMsg('참석 확인이 가능한 신청 내역이 없습니다.'); }
+
+  const id = key(t, a.receiptNo);
+  const done = state.attend.get(id);
+  if (done) {
+    beep(false);
+    go('view-lookup');
+    return lookupMsg(`<b>${esc(a.name)}</b>님은 이 회차에 이미 출석 처리되었습니다. (${esc(done.checkinAt)} · ${esc(done.desk)})
+      <div class="btns"><button type="button" class="small" data-cert="${esc(id)}">확인증 다시 보기</button></div>`, 'warn');
+  }
+
+  if (a.session !== t) {                               // 다른 회차 신청자 → 관리자 승인 필요
+    const ap = state.approvals.get(id);
+    if (ap && ap.status === 'approved') return openConfirm(a, true);
+    beep(false);
+    go('view-lookup');
+    const applied = a.session ? `<b>${esc(sessLabel(a.session))}</b> 신청자입니다` : '신청 회차를 확인할 수 없습니다';
+    let status = '';
+    if (ap && ap.status === 'pending') status = `<div style="margin-top:6px">⏳ 승인 요청됨 (${esc(ap.requestedAt)}) · 관리자 확인 대기 중</div>`;
+    if (ap && ap.status === 'rejected') status = `<div style="margin-top:6px">✕ 이전 요청이 거절되었습니다 (${esc(ap.decidedAt)})</div>`;
+    return lookupMsg(`<b>${esc(a.name)}</b>님(${esc(a.org)})은 ${applied}.<br>
+      현재 회차(<b>${esc(sessLabel(t))}</b>)에 참석하려면 <b>관리자 승인</b>이 필요합니다.${status}
+      <div class="btns">
+        ${!ap || ap.status === 'rejected' ? `<button type="button" class="small" data-req="${esc(a.receiptNo)}">승인 요청 등록</button>` : ''}
+        <button type="button" class="small primary" data-approve-now="${esc(a.receiptNo)}">관리자 바로 승인</button>
+      </div>`, 'warn');
+  }
+  beep(true);
+  openConfirm(a, false);
+}
+
+function openConfirm(a, approved) {
+  const t = today();
+  state.current = { a, approved };
+  $('#confirmInfo').innerHTML = `
+    <div class="who"><div class="name">${esc(a.name)} 님</div><div class="org">${esc(a.org)}</div></div>
+    <dl class="kv">
+      <dt>접수번호</dt><dd>${esc(a.receiptNo)}</dd>
+      <dt>참석 회차</dt><dd>${esc(sessLabel(t))}</dd>
+      ${approved ? `<dt>신청 회차</dt><dd>${esc(sessLabel(a.session))}</dd>` : ''}
+      ${a.projectNo ? `<dt>과제번호</dt><dd>${esc(a.projectNo)}</dd>` : ''}
+      ${a.phone ? `<dt>휴대폰번호</dt><dd>${esc(maskPhone(a.phone))}</dd>` : ''}
+    </dl>`;
+  $('#confirmWarn').innerHTML = approved ? '<div class="msg ok">관리자 승인으로 다른 회차 신청자의 참석을 확인합니다.</div>' : '';
+  $('#confirmMsg').innerHTML = '';
+  go('view-confirm');
+  requestAnimationFrame(sizeSig);
+}
+
+/* ===================== 승인 ===================== */
+function newApproval(a) {
+  const now = new Date();
+  return {
+    id: key(today(), a.receiptNo), session: today(), receiptNo: a.receiptNo,
+    name: a.name, org: a.org, appliedSession: a.session, status: 'pending',
+    requestedAt: fmt(now), requestedISO: now.toISOString(), decidedAt: '', desk: state.settings.desk || '',
+  };
+}
+
+async function requestApproval(no) {
+  const a = findApplicant(no);
+  if (!a) return;
+  const x = newApproval(a);
+  state.approvals.set(x.id, x);
+  await DB.put('approvals', x).catch(() => {});
+  refreshHeader();
+  lookupMsg(`<b>${esc(a.name)}</b>님의 승인 요청을 등록했습니다.<br>관리자가 [승인 관리]에서 승인하면 그 화면의 [서명 진행] 또는 다시 조회로 접수할 수 있습니다.`, 'ok');
+}
+
+async function setDecision(id, status) {
+  const x = state.approvals.get(id);
+  if (!x) return;
+  x.status = status; x.decidedAt = fmt(new Date());
+  await DB.put('approvals', x).catch(() => {});
+  refreshHeader();
+}
+
+async function approveNow(no) {
+  const a = findApplicant(no);
+  if (!a) return;
+  if (!await askPin(`${a.name}님의 타 회차 참석을 승인합니다.`)) return;
+  const id = key(today(), no);
+  if (!state.approvals.has(id)) state.approvals.set(id, newApproval(a));
+  await setDecision(id, 'approved');
+  openConfirm(a, true);
+}
+
+function renderApprovals() {
+  const t = today();
+  $('#apSession').textContent = t ? sessLabel(t) : '회차 미선택';
+  const list = [...state.approvals.values()].filter(x => x.session === t)
+    .sort((a, b) => b.requestedISO.localeCompare(a.requestedISO));
+  const pend = list.filter(x => x.status === 'pending');
+  const done = list.filter(x => x.status !== 'pending');
+
+  $('#apPending').innerHTML = pend.length ? pend.map(x => `
+    <div class="ap-card">
+      <div><div class="nm">${esc(x.name)} <span class="muted" style="font-size:15px;font-weight:400">${esc(x.org)}</span></div>
+        <div class="muted" style="font-size:14px">${esc(x.receiptNo)} · 신청 회차 <b>${esc(sessLabel(x.appliedSession))}</b> → 현재 <b>${esc(sessName(t))}</b> · 요청 ${esc(x.requestedAt.slice(11))} ${esc(x.desk)}</div></div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="danger" data-decide="rejected" data-id="${esc(x.id)}">거절</button>
+        <button type="button" class="primary" data-decide="approved" data-id="${esc(x.id)}">승인</button>
+      </div>
+    </div>`).join('') : '<p class="muted" style="margin:0">대기 중인 요청이 없습니다.</p>';
+
+  $('#apDone').innerHTML = done.length ? done.map(x => {
+    const attended = state.attend.has(x.id);
+    const action = x.status !== 'approved' ? ''
+      : attended ? '<span class="pill ok">출석 완료</span>'
+      : `<button type="button" class="small primary" data-sign="${esc(x.receiptNo)}">서명 진행</button>`;
+    return `<tr><td>${esc(x.name)}</td><td>${esc(x.org)}</td><td>${esc(x.receiptNo)}</td><td>${esc(sessLabel(x.appliedSession))}</td>
+      <td>${x.status === 'approved' ? '<span class="pill ok">승인</span>' : '<span class="pill err">거절</span>'}</td>
+      <td>${esc(x.decidedAt)}</td><td>${action}</td></tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">처리 내역이 없습니다.</td></tr>';
+}
+
+/* ===================== 서명 패드 ===================== */
+const sigPad = $('#sigPad');
+const sctx = sigPad.getContext('2d');
+let drawing = false, inked = 0, last = null;
+
+function sizeSig() {
+  const r = sigPad.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  sigPad.width = Math.round(r.width * dpr);
+  sigPad.height = Math.round(r.height * dpr);
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.lineWidth = 3; sctx.lineCap = 'round'; sctx.lineJoin = 'round';
+  sctx.strokeStyle = '#111'; sctx.fillStyle = '#111';
+  inked = 0; $('#sigHint').style.display = '';
+}
+const sigPos = e => { const r = sigPad.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+
+sigPad.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  sigPad.setPointerCapture(e.pointerId);
+  drawing = true; last = sigPos(e);
+  sctx.beginPath(); sctx.arc(last.x, last.y, 1.4, 0, Math.PI * 2); sctx.fill();
+  $('#sigHint').style.display = 'none';
+});
+sigPad.addEventListener('pointermove', e => {
+  if (!drawing) return;
+  const p = sigPos(e);
+  sctx.beginPath(); sctx.moveTo(last.x, last.y); sctx.lineTo(p.x, p.y); sctx.stroke();
+  inked += Math.hypot(p.x - last.x, p.y - last.y);
+  last = p;
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => sigPad.addEventListener(t, () => drawing = false));
+
+function sigDataUrl() {                       // 저장 용량을 줄이기 위해 480x240으로 축소
+  const t = document.createElement('canvas');
+  t.width = 480; t.height = 240;
+  t.getContext('2d').drawImage(sigPad, 0, 0, 480, 240);
+  return t.toDataURL('image/png');
+}
+
+/* ===================== 참석 확인 ===================== */
+async function submitCheckin() {
+  const cur = state.current;
+  if (!cur) return go('view-lookup');
+  if (inked < 30) {
+    $('#confirmMsg').innerHTML = '<div class="msg err">서명을 해주세요.</div>';
+    return;
+  }
+  const a = cur.a, t = today();
+  const btn = $('#btnSubmit');
+  btn.disabled = true;
+  const now = new Date();
+  const rec = {
+    id: key(t, a.receiptNo), session: t, appliedSession: a.session, approved: !!cur.approved,
+    receiptNo: a.receiptNo, name: a.name, org: a.org, projectNo: a.projectNo, phone: a.phone,
+    checkinAt: fmt(now), checkinISO: now.toISOString(),
+    desk: state.settings.desk || '', sig: sigDataUrl(),
+  };
+  try { await DB.put('attend', rec); }
+  catch (e) { alert('브라우저 저장에 실패했습니다. 화면을 닫기 전에 [출석부]에서 CSV/출석부를 꼭 저장하세요.'); }
+  state.attend.set(rec.id, rec);
+  state.current = null;
+  btn.disabled = false;
+  refreshHeader();
+  showCert(rec);
+}
+
+/* ===================== 참석확인증 (이미지) ===================== */
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+const CERT_FONT = '"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
+
+async function drawCertificate(rec) {
+  const s = state.settings, info = sessionInfo(rec.session);
+  const W = 900, H = 1270;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#1f3a5f';
+  g.lineWidth = 6; g.strokeRect(30, 30, W - 60, H - 60);
+  g.lineWidth = 2; g.strokeRect(46, 46, W - 92, H - 92);
+
+  g.textAlign = 'center'; g.fillStyle = '#111';
+  g.font = `bold 64px ${CERT_FONT}`; g.fillText('참 석 확 인 증', W / 2, 190);
+  g.font = `22px ${CERT_FONT}`; g.fillStyle = '#666'; g.fillText('접수번호  ' + rec.receiptNo, W / 2, 240, W - 160);
+
+  const rows = [
+    ['성      명', rec.name], ['소속기관', rec.org], ['과제번호', rec.projectNo],
+    ['설 명 회', s.eventName], ['회      차', sessName(rec.session) || rec.session], ['일      시', info.date],
+    ['장      소', info.place], ['출석확인', rec.checkinAt],
+  ].filter(([, v]) => v);
+  g.textAlign = 'left'; g.font = `30px ${CERT_FONT}`;
+  rows.forEach(([k, v], i) => {
+    const y = 340 + i * 62;
+    g.fillStyle = '#666'; g.fillText(k, 120, y);
+    g.fillStyle = '#111'; g.fillText(String(v), 300, y, W - 400);
+  });
+
+  g.textAlign = 'center'; g.fillStyle = '#111'; g.font = `30px ${CERT_FONT}`;
+  g.fillText('위 사람은 위 설명회에 참석하였음을 확인합니다.', W / 2, 875, W - 160);
+
+  g.font = `22px ${CERT_FONT}`; g.fillStyle = '#666'; g.fillText('참석자 서명', W / 2, 935);
+  try { g.drawImage(await loadImg(rec.sig), W / 2 - 130, 948, 260, 130); } catch (e) {}
+
+  g.fillStyle = '#111'; g.font = `28px ${CERT_FONT}`;
+  g.fillText(fmtKo(new Date(rec.checkinISO)), W / 2, 1140);
+  if (s.issuer) {
+    g.font = `bold 36px ${CERT_FONT}`; g.fillText(s.issuer, W / 2, 1195, W - 240);
+    if (s.stamp) {
+      const tw = Math.min(g.measureText(s.issuer).width, W - 240);
+      try { g.drawImage(await loadImg(s.stamp), W / 2 + tw / 2 - 18, 1135, 82, 82); } catch (e) {}
+    }
+  }
+  return cv.toDataURL('image/jpeg', 0.85);
+}
+
+async function showCert(rec) {
+  go('view-cert');
+  const img = $('#certImg');
+  img.removeAttribute('src');
+  img.src = await drawCertificate(rec);
+}
+
+/* ===================== QR 스캔 ===================== */
+const scan = { stream: null, raf: 0, detector: null, busy: false, last: 0, canvas: null };
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.appendChild(s);
+  });
+}
+
+async function startScan() {
+  lookupMsg('');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    return lookupMsg('이 브라우저에서는 카메라를 사용할 수 없습니다. 번호를 직접 입력하세요.');
+  try {
+    scan.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+  } catch (e) {
+    return lookupMsg('카메라 권한이 거부되었거나 카메라를 찾을 수 없습니다.');
+  }
+  const v = $('#video');
+  v.srcObject = scan.stream;
+  await v.play().catch(() => {});
+  $('#scanBox').classList.remove('hidden');
+  $('#btnScan').classList.add('hidden');
+
+  scan.detector = null;
+  if ('BarcodeDetector' in window) {
+    try {
+      const f = await BarcodeDetector.getSupportedFormats();
+      if (f.includes('qr_code')) scan.detector = new BarcodeDetector({ formats: ['qr_code'] });
+    } catch (e) {}
+  }
+  if (!scan.detector && !window.jsQR) {
+    try { await loadScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'); }
+    catch (e) {
+      stopScan();
+      return lookupMsg('QR 인식 모듈을 불러오지 못했습니다(인터넷 필요). 번호를 직접 입력하거나 USB QR 스캐너를 사용하세요.');
+    }
+  }
+  tick();
+}
+
+function tick() {
+  if (!scan.stream) return;
+  scan.raf = requestAnimationFrame(tick);
+  const now = performance.now();
+  if (scan.busy || now - scan.last < 180) return;
+  scan.last = now; scan.busy = true;
+  detectOnce().then(text => {
+    if (text && scan.stream) { stopScan(); $('#q').value = extractQuery(text); handleQuery(text); }
+  }).catch(() => {}).finally(() => { scan.busy = false; });
+}
+
+async function detectOnce() {
+  const v = $('#video');
+  if (v.readyState < 2 || !v.videoWidth) return null;
+  if (scan.detector) {
+    const codes = await scan.detector.detect(v);
+    return codes[0] ? codes[0].rawValue : null;
+  }
+  const c = scan.canvas || (scan.canvas = document.createElement('canvas'));
+  const k = Math.min(1, 640 / v.videoWidth);
+  c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(v, 0, 0, c.width, c.height);
+  const r = window.jsQR(x.getImageData(0, 0, c.width, c.height).data, c.width, c.height, { inversionAttempts: 'dontInvert' });
+  return r ? r.data : null;
+}
+
+function stopScan() {
+  cancelAnimationFrame(scan.raf);
+  if (scan.stream) { scan.stream.getTracks().forEach(t => t.stop()); scan.stream = null; }
+  $('#scanBox').classList.add('hidden');
+  $('#btnScan').classList.remove('hidden');
+}
+
+/* ===================== 출석부 ===================== */
+// 회차의 전체 명단(신청 순서) + 승인받아 출석한 타 회차 신청자
+function buildRoster(code) {
+  const base = rosterBase(code).map(a => ({ a, rec: state.attend.get(key(code, a.receiptNo)) || null, walkin: false }));
+  const inBase = new Set(base.map(r => r.a.receiptNo));
+  const extra = attendFor(code).filter(r => !inBase.has(r.receiptNo))
+    .sort((x, y) => x.checkinISO.localeCompare(y.checkinISO))
+    .map(r => ({
+      a: { receiptNo: r.receiptNo, name: r.name, org: r.org, projectNo: r.projectNo, phone: r.phone, session: r.appliedSession },
+      rec: r, walkin: true,
+    }));
+  return base.concat(extra);
+}
+
+function renderList() {
+  const code = state.listSession;
+  $('#listSession').innerHTML = SESSIONS.map(s =>
+    `<option value="${s.code}" ${s.code === code ? 'selected' : ''}>${esc(s.name)} (${s.code})${s.code === today() ? ' · 현재' : ''}</option>`).join('');
+
+  const all = buildRoster(code);
+  const nIn = all.filter(r => r.rec).length;
+  $('#fAll').textContent = all.length; $('#fIn').textContent = nIn; $('#fOut').textContent = all.length - nIn;
+  document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === state.listFilter));
+
+  const q = $('#listSearch').value.trim().toLowerCase();
+  const rows = all.map((r, i) => ({ ...r, no: i + 1 }))
+    .filter(r => state.listFilter === 'all' || (state.listFilter === 'in' ? r.rec : !r.rec))
+    .filter(r => !q || [r.a.name, r.a.org, r.a.receiptNo, r.a.projectNo].some(v => String(v || '').toLowerCase().includes(q)));
+
+  $('#listBody').innerHTML = rows.length ? rows.map(r => {
+    const note = r.walkin ? `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>` : '';
+    let action = '';
+    if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
+                         <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
+    else if (code === today()) action = `<button type="button" class="small" data-open="${esc(r.a.receiptNo)}">접수 처리</button>`;
+    return `<tr class="${r.rec ? '' : 'absent'}">
+      <td>${r.no}</td><td><b>${esc(r.a.name)}</b></td><td>${esc(r.a.org)}</td><td>${esc(r.a.receiptNo)}</td>
+      <td>${r.rec ? `<span class="pill ok">출석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미출석</span>'}</td>
+      <td class="sig">${r.rec ? `<img src="${r.rec.sig}" alt="서명">` : ''}</td>
+      <td>${note}</td><td>${action}</td></tr>`;
+  }).join('') : `<tr><td colspan="8" class="empty">${all.length ? '조건에 맞는 사람이 없습니다.' : '이 회차의 CONFIRMED 신청자가 없습니다.'}</td></tr>`;
+}
+
+function exportCsv() {
+  const code = state.listSession;
+  const all = buildRoster(code);
+  if (!all.length) return alert('이 회차의 명단이 없습니다.');
+  const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+  const head = ['No', '참석 회차', '접수번호', '신청 회차', '성명', '연구개발기관명', '과제번호', '휴대폰번호', '출석여부', '출석시각', '비고', '데스크'];
+  const rows = all.map((r, i) => [i + 1, sessLabel(code), r.a.receiptNo, sessLabel(r.a.session), r.a.name, r.a.org, r.a.projectNo,
+    formatPhone(r.a.phone), r.rec ? '출석' : '미출석', r.rec ? r.rec.checkinAt : '', r.walkin ? '타 회차 관리자 승인' : '', r.rec ? r.rec.desk : '']);
+  download(`출석부_${sessName(code) || code}_${fileStamp()}.csv`,
+    '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
+}
+
+function exportRoster() {
+  const code = state.listSession;
+  const all = buildRoster(code);
+  if (!all.length) return alert('이 회차의 명단이 없습니다.');
+  const s = state.settings, info = sessionInfo(code);
+  const nIn = all.filter(r => r.rec).length;
+  const rows = all.map((r, i) => `
+    <tr><td>${i + 1}</td><td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.receiptNo)}</td>
+      <td>${r.rec ? esc(r.rec.checkinAt.slice(11)) : ''}</td><td class="sig">${r.rec ? `<img src="${r.rec.sig}">` : ''}</td>
+      <td>${r.walkin ? '타 회차 승인' : ''}</td></tr>`).join('');
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>서명 출석부 - ${esc(sessName(code))}</title>
+<style>body{font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;margin:24px}h1{font-size:22px;margin:0 0 4px}
+p{margin:0 0 16px;color:#555}table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border:1px solid #999;padding:4px 6px;text-align:center}th{background:#eee}
+td.sig{width:140px;height:46px;padding:2px}td.sig img{height:40px}tr{page-break-inside:avoid}</style></head><body>
+<h1>${esc(s.eventName)} · ${esc(sessLabel(code))} 참석자 서명부</h1>
+<p>${esc([info.date, info.place].filter(Boolean).join(' · '))} · 대상 ${all.length}명 · 출석 ${nIn}명 · 미출석 ${all.length - nIn}명 · 출력 ${esc(fmt(new Date()))}</p>
+<table><thead><tr><th>No</th><th>성명</th><th>기관</th><th>과제번호</th><th>접수번호</th><th>출석시각</th><th>서명</th><th>비고</th></tr></thead>
+<tbody>${rows}</tbody></table></body></html>`;
+  download(`서명출석부_${sessName(code) || code}_${fileStamp()}.html`, html, 'text/html;charset=utf-8');
+}
+
+async function deleteAttend(id) {
+  const r = state.attend.get(id);
+  if (!r) return;
+  if (!confirm(`${r.name}님의 출석 기록(서명 포함)을 삭제할까요?`)) return;
+  if (!await askPin(`${r.name}님의 출석 기록을 삭제하려면 관리자 비밀번호를 입력하세요.`, true)) return;
+  await DB.remove('attend', id).catch(() => {});
+  state.attend.delete(id);
+  refreshHeader(); renderList();
+}
+
+async function resetAll() {
+  if (!state.attend.size && !state.approvals.size) return alert('삭제할 기록이 없습니다.');
+  if (!confirm('모든 회차의 출석 기록(서명 포함)과 승인 기록을 삭제합니다.\n먼저 회차별 출석부를 저장하셨나요?')) return;
+  if (!await askPin('전체 초기화를 하려면 관리자 비밀번호를 입력하세요.', true)) return;
+  await DB.clear('attend').catch(() => {});
+  await DB.clear('approvals').catch(() => {});
+  state.attend.clear(); state.approvals.clear();
+  refreshHeader();
+  alert('초기화되었습니다.');
+}
+
+/* ===================== 명단 불러오기 ===================== */
+function parseTable(text) {
+  text = text.replace(/^﻿/, '');
+  const first = text.split(/\r?\n/)[0] || '';
+  const delim = first.split('\t').length > first.split(',').length ? '\t' : ',';
+  const rows = []; let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += ch;
+    } else if (ch === '"' && field === '') inQ = true;
+    else if (ch === delim) { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (ch !== '\r') field += ch;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+
+function mapApplicants(rows) {
+  const hi = rows.findIndex((r, i) => i < 10 && r.some(c => c.replace(/\s/g, '').includes('접수번호')));
+  if (hi < 0) throw new Error('"접수번호" 열이 있는 머리글 행을 찾을 수 없습니다.');
+  const H = rows[hi].map(c => c.replace(/\s/g, '').toLowerCase());
+  const col = keys => H.findIndex(h => keys.some(k => h.includes(k)));
+  const ix = {
+    receiptNo: col(['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차']),
+    projectNo: col(['과제번호']), org: col(['기관']), phone: col(['휴대폰', '핸드폰', '연락처', '전화']),
+    status: col(['상태', 'status']),
+  };
+  if (ix.name < 0) throw new Error('"성명" 열을 찾을 수 없습니다.');
+  if (ix.status < 0) throw new Error('"상태(status)" 열을 찾을 수 없습니다. CONFIRMED 여부를 확인하려면 이 열이 필요합니다.');
+  return rows.slice(hi + 1).map(r => {
+    const g = k => ix[k] >= 0 ? String(r[ix[k]] ?? '').trim() : '';
+    const a = { receiptNo: g('receiptNo'), name: g('name'), sessionText: g('sessionText'),
+                projectNo: g('projectNo'), org: g('org'), phone: g('phone'), status: g('status') };
+    a.session = detectSession(a.receiptNo, a.sessionText);
+    return a;
+  }).filter(a => a.receiptNo);
+}
+
+async function readFileText(file) {
+  const buf = await file.arrayBuffer();
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (e) { return new TextDecoder('euc-kr').decode(buf); }   // 엑셀에서 저장한 CSV 대비
+}
+
+function showImportInfo() {
+  const n = state.applicants.length;
+  if (!n) return $('#importInfo').innerHTML = '<div class="msg warn">불러온 명단이 없습니다.</div>';
+  const ok = state.applicants.filter(isAllowed);
+  const others = {};
+  state.applicants.filter(a => !isAllowed(a)).forEach(a => { const k = a.status || '상태 없음'; others[k] = (others[k] || 0) + 1; });
+  const otherText = Object.entries(others).map(([k, v]) => `${esc(k)} ${v}명`).join(', ');
+  const perSess = SESSIONS.map(s => `${esc(s.name)} ${ok.filter(a => a.session === s.code).length}명`).join(' · ');
+  const unknown = ok.filter(a => !a.session).length;
+  $('#importInfo').innerHTML = `<div class="msg ${ok.length ? 'ok' : 'err'}">
+      현재 명단: 전체 <b>${n}명</b> 중 <b>CONFIRMED ${ok.length}명</b>${otherText ? ` · 참석 불가: ${otherText}` : ''}<br>회차별: ${perSess}</div>` +
+    (unknown ? `<div class="msg warn">회차를 알 수 없는 CONFIRMED 신청자 ${unknown}명 — 접수번호에 S001~S004가 없고 회차 열로도 구분되지 않습니다. 이 사람들은 관리자 승인 후에만 접수됩니다.</div>` : '');
+}
+
+async function importApplicants() {
+  const text = $('#pasteBox').value;
+  if (!text.trim()) return $('#importInfo').innerHTML = '<div class="msg err">CSV 파일을 선택하거나 내용을 붙여넣으세요.</div>';
+  let list;
+  try { list = mapApplicants(parseTable(text)); }
+  catch (e) { return $('#importInfo').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  if (!list.length) return $('#importInfo').innerHTML = '<div class="msg err">불러올 신청자가 없습니다.</div>';
+
+  const seen = new Set(), dup = [];
+  list.forEach(a => { if (seen.has(a.receiptNo)) dup.push(a.receiptNo); seen.add(a.receiptNo); });
+
+  state.applicants = list;
+  await DB.set('applicants', list).catch(() => alert('명단 저장에 실패했습니다. 새로고침하면 다시 불러와야 합니다.'));
+  $('#pasteBox').value = ''; $('#csvFile').value = '';
+  showImportInfo();
+  if (dup.length) $('#importInfo').innerHTML += `<div class="msg warn">중복 접수번호 ${dup.length}건: ${esc(dup.slice(0, 5).join(', '))}${dup.length > 5 ? ' …' : ''}</div>`;
+  refreshHeader();
+}
+
+async function clearApplicants() {
+  if (!confirm('불러온 신청자 명단을 이 기기에서 삭제합니다. (출석 기록은 유지됩니다)')) return;
+  if (!await askPin('명단을 삭제하려면 관리자 비밀번호를 입력하세요.', true)) return;
+  state.applicants = [];
+  await DB.del('applicants').catch(() => {});
+  showImportInfo(); refreshHeader();
+}
+
+/* ===================== 설정 ===================== */
+function fillSettingsForm() {
+  const s = state.settings;
+  $('#sEventName').value = s.eventName; $('#sIssuer').value = s.issuer; $('#sDesk').value = s.desk;
+  $('#sPinNew').value = '';
+  $('#sessInfoForm').innerHTML = SESSIONS.map(x => {
+    const info = sessionInfo(x.code);
+    return `<div class="sess-info"><b>${esc(x.name)} <span class="muted" style="font-weight:400;font-size:13px">${x.code}</span></b>
+      <input data-info-date="${x.code}" value="${esc(info.date || '')}" placeholder="일시 (예: 2026.12.03(목) 14:00)">
+      <input data-info-place="${x.code}" value="${esc(info.place || '')}" placeholder="장소"></div>`;
+  }).join('');
+  $('#stampPreview').src = s.stamp || '';
+  $('#stampPreview').classList.toggle('hidden', !s.stamp);
+}
+
+async function saveSettings() {
+  const pin = $('#sPinNew').value.trim();
+  if (pin && !/^\d{4,}$/.test(pin)) {
+    $('#settingsMsg').innerHTML = '<div class="msg err">관리자 비밀번호는 숫자 4자리 이상이어야 합니다.</div>';
+    return;
+  }
+  const info = {};
+  SESSIONS.forEach(x => {
+    info[x.code] = {
+      date: $(`[data-info-date="${x.code}"]`).value.trim(),
+      place: $(`[data-info-place="${x.code}"]`).value.trim(),
+    };
+  });
+  Object.assign(state.settings, {
+    eventName: $('#sEventName').value.trim(), issuer: $('#sIssuer').value.trim(),
+    desk: $('#sDesk').value.trim(), sessionInfo: info,
+  });
+  if (pin) state.settings.adminPin = pin;
+  await saveSettingsDb();
+  refreshHeader();
+  $('#sPinNew').value = '';
+  $('#settingsMsg').innerHTML = `<div class="msg ok">저장되었습니다.${pin ? ' 관리자 비밀번호가 변경되었습니다.' : ''}</div>`;
+  setTimeout(() => $('#settingsMsg').innerHTML = '', 2500);
+}
+
+async function loadStamp(file) {
+  const url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
+  const img = await loadImg(url);
+  const k = Math.min(1, 240 / Math.max(img.width, img.height));      // 가볍게 축소
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  state.settings.stamp = c.toDataURL('image/png');
+  $('#stampPreview').src = state.settings.stamp;
+  $('#stampPreview').classList.remove('hidden');
+  await saveSettingsDb();
+}
+
+/* ===================== 이벤트 연결 ===================== */
+$('#lookupForm').addEventListener('submit', e => { e.preventDefault(); handleQuery($('#q').value); });
+$('#btnScan').addEventListener('click', startScan);
+$('#btnStopScan').addEventListener('click', stopScan);
+$('#btnBack').addEventListener('click', () => { state.current = null; go('view-lookup'); });
+$('#btnClear').addEventListener('click', sizeSig);
+$('#btnSubmit').addEventListener('click', submitCheckin);
+$('#btnNext').addEventListener('click', () => { $('#q').value = ''; lookupMsg(''); go('view-lookup'); });
+$('#listSession').addEventListener('change', e => { state.listSession = e.target.value; renderList(); });
+$('#listSearch').addEventListener('input', renderList);
+$('#btnCsv').addEventListener('click', exportCsv);
+$('#btnRoster').addEventListener('click', exportRoster);
+$('#btnReset').addEventListener('click', resetAll);
+$('#btnImport').addEventListener('click', importApplicants);
+$('#btnClearApplicants').addEventListener('click', clearApplicants);
+$('#csvFile').addEventListener('change', async e => { const f = e.target.files[0]; if (f) $('#pasteBox').value = await readFileText(f); });
+$('#btnSaveSettings').addEventListener('click', saveSettings);
+$('#stampFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) loadStamp(f); });
+$('#btnStampDel').addEventListener('click', async () => {
+  state.settings.stamp = ''; $('#stampFile').value = '';
+  $('#stampPreview').classList.add('hidden');
+  await saveSettingsDb();
+});
+$('#btnLock').addEventListener('click', () => {
+  state.adminUntil = 0; refreshAdminUi();
+  if (['view-approve', 'view-setup'].includes(state.view)) go('view-lookup');
+});
+
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-go],[data-filter],[data-open],[data-cert],[data-del],[data-pick-session],[data-req],[data-approve-now],[data-decide],[data-sign]');
+  if (!t) return;
+  const d = t.dataset;
+  if (d.go) {
+    if (d.admin && !await askPin(d.admin)) return;
+    return go(d.go);
+  }
+  if (d.filter) { state.listFilter = d.filter; return renderList(); }
+  if (d.pickSession) return pickSession(d.pickSession);
+  if (d.open) { const a = findApplicant(d.open); if (a) openApplicant(a); return; }
+  if (d.cert) { const r = state.attend.get(d.cert); if (r) showCert(r); return; }
+  if (d.del) return deleteAttend(d.del);
+  if (d.req) return requestApproval(d.req);
+  if (d.approveNow) return approveNow(d.approveNow);
+  if (d.decide) {
+    if (!await askPin('승인 여부를 처리합니다.')) return;
+    await setDecision(d.id, d.decide);
+    return renderApprovals();
+  }
+  if (d.sign) { const a = findApplicant(d.sign); if (a) openApplicant(a); return; }
+});
+
+/* ===================== 모바일 · 오프라인 ===================== */
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+if (navigator.storage && navigator.storage.persist) {   // 브라우저가 기록을 임의로 지우지 않도록 요청
+  navigator.storage.persist().catch(() => {});
+}
+// 화면을 돌렸을 때 서명 칸 크기 맞추기 (서명 전일 때만)
+window.addEventListener('resize', () => {
+  if (state.view === 'view-confirm' && inked === 0) sizeSig();
+});
+
+/* ===================== 시작 ===================== */
+(async function init() {
+  try { await DB.open(); }
+  catch (e) { alert('이 브라우저에서는 데이터를 저장할 수 없습니다. 크롬(Chrome)으로 열어 주세요.'); }
+  const saved = await DB.get('settings').catch(() => null);
+  state.settings = { ...DEFAULT_SETTINGS, ...(saved || {}) };
+  if (!state.settings.sessionInfo) state.settings.sessionInfo = {};
+  state.applicants = (await DB.get('applicants').catch(() => null)) || [];
+  state.applicants.forEach(a => { if (a.session === undefined || !SESSIONS.some(s => s.code === a.session)) a.session = detectSession(a.receiptNo, a.sessionText || a.session); });
+  ((await DB.all('attend').catch(() => [])) || []).forEach(r => state.attend.set(r.id, r));
+  ((await DB.all('approvals').catch(() => [])) || []).forEach(r => state.approvals.set(r.id, r));
+  refreshHeader(); refreshAdminUi();
+  if (!state.applicants.length) go('view-setup');
+  else if (!today()) go('view-session');
+  else go('view-lookup');
+})();
+</script>
+</body>
+</html>
