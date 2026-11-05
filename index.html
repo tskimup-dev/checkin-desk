@@ -387,9 +387,10 @@
 
     <div class="card">
       <h2>3. 데이터 정리</h2>
-      <p class="muted" style="margin:0">행사 후 참석자 명단을 저장한 뒤 이 기기의 기록을 지우세요.</p>
+      <p class="muted" style="margin:0">행사 후 참석자 명단을 저장한 뒤 기록을 지우세요. <b>구글 시트까지 전체 초기화</b>는 시트의 참석기록·승인·현장신청을 비우고, 연동된 모든 기기의 기록도 자동으로 비웁니다. 명단과 설정은 유지돼요.</p>
       <div class="actions" style="justify-content:flex-start">
-        <button type="button" class="danger" id="btnReset">참석·승인·현장 신청 기록 전체 초기화</button>
+        <button type="button" class="danger" id="btnReset">이 기기 기록 초기화</button>
+        <button type="button" class="danger" id="btnResetSheet" style="background:var(--err-bg)">구글 시트까지 전체 초기화 (모든 기기)</button>
       </div>
     </div>
   </section>
@@ -465,7 +466,7 @@ const state = {
   approvals: new Map(),   // id = 회차|접수번호
   walkins: [],            // 현장 신청자
   outbox: [],             // 시트로 아직 못 보낸 작업
-  lastSync: 0, lastFull: 0, syncState: '', syncErr: '', syncBusy: false,
+  lastSync: 0, lastFull: 0, lastResetAt: 0, syncState: '', syncErr: '', syncBusy: false,
   settings: { ...DEFAULT_SETTINGS },
   current: null,          // { a, approved }
   view: '',
@@ -934,7 +935,7 @@ async function submitCheckin() {
   if (syncOn()) {                                   // 시트에 먼저 기록 (다른 데스크와 중복 방지)
     btn.textContent = '저장 중…';
     try {
-      const r = await api({ action: 'checkin', rec });
+      const r = await api({ action: 'checkin', rec, ts: Date.now() });
       if (r.exists && r.exists.checkinISO !== rec.checkinISO) {
         state.attend.set(r.exists.id, r.exists);
         await DB.put('attend', r.exists).catch(() => {});
@@ -947,7 +948,7 @@ async function submitCheckin() {
       state.syncState = 'ok';
     } catch (e) {
       if (e.fatal) alert(e.message);
-      state.outbox.push({ action: 'checkin', rec });   // 연결이 안 되면 기기에 두었다가 나중에 전송
+      state.outbox.push({ action: 'checkin', rec, ts: Date.now() });   // 연결이 안 되면 기기에 두었다가 나중에 전송
       await DB.set('outbox', state.outbox).catch(() => {});
       state.syncState = 'off';
     }
@@ -1119,6 +1120,27 @@ async function deleteAttend(id) {
   state.attend.delete(id);
   queue({ action: 'deleteAttend', id });
   refreshHeader(); renderList();
+}
+
+async function resetSheet() {
+  if (!syncOn()) return alert('구글 시트 연동이 되어 있을 때만 쓸 수 있습니다. 연동하지 않았다면 [이 기기 기록 초기화]를 쓰세요.');
+  if (!confirm('구글 시트의 참석기록·승인·현장신청을 모두 지우고, 연동된 모든 기기의 기록도 비웁니다.\n명단과 설정은 유지됩니다.\n\n먼저 참석자 명단을 저장하셨나요?')) return;
+  if (!await askPin('시트까지 전체 초기화를 하려면 관리자 비밀번호를 입력하세요.', true)) return;
+  let r;
+  try { r = await api({ action: 'resetAll' }); }
+  catch (e) { return alert('초기화하지 못했습니다: ' + (e.name === 'AbortError' ? '응답 시간 초과' : e.message)); }
+  if (!r.ok) {
+    return alert(r.error === 'action'
+      ? 'Apps Script가 예전 버전입니다. 새 Code.gs를 붙여넣고 [배포 → 배포 관리 → 수정 → 새 버전]으로 다시 배포해 주세요.'
+      : '초기화하지 못했습니다: ' + (r.error || ''));
+  }
+  for (const st of ['attend', 'approvals']) await DB.clear(st).catch(() => {});
+  state.attend.clear(); state.approvals.clear(); state.walkins = []; state.outbox = [];
+  await DB.del('walkins').catch(() => {}); await DB.set('outbox', []).catch(() => {});
+  state.lastResetAt = r.resetAt; await DB.set('lastResetAt', r.resetAt).catch(() => {});
+  state.lastSync = 0;
+  await syncTick(true);
+  alert('구글 시트까지 전체 초기화했습니다. 다른 기기도 20초 안에 자동으로 비워집니다.');
 }
 
 async function resetAll() {
@@ -1324,6 +1346,7 @@ $('#listSearch').addEventListener('input', renderList);
 $('#btnCsv').addEventListener('click', exportCsv);
 $('#btnRoster').addEventListener('click', exportRoster);
 $('#btnReset').addEventListener('click', resetAll);
+$('#btnResetSheet').addEventListener('click', resetSheet);
 $('#btnImport').addEventListener('click', importApplicants);
 $('#btnClearApplicants').addEventListener('click', clearApplicants);
 $('#csvFile').addEventListener('change', async e => { const f = e.target.files[0]; if (f) $('#pasteBox').value = await readFileText(f); });
@@ -1387,6 +1410,7 @@ function pushSettings() { if (syncOn()) queue({ action: 'settings', data: shared
 
 async function queue(op) {
   if (!syncOn()) return;
+  op.ts = op.ts || Date.now();
   state.outbox.push(op);
   await DB.set('outbox', state.outbox).catch(() => {});
   updateSyncUi();
@@ -1410,6 +1434,14 @@ async function flush(conflicts) {
 async function pull(fromZero, withApplicants) {
   const r = await api({ action: 'pull', since: fromZero ? 0 : state.lastSync, full: withApplicants ? 1 : 0 }, 'GET');
   if (!r.ok) throw new Error(r.error || '시트 불러오기 실패');
+  if (r.resetAt && r.resetAt > state.lastResetAt) {     // 다른 기기에서 '시트까지 전체 초기화'를 함
+    state.outbox = state.outbox.filter(o => o.action === 'settings' || (o.ts || 0) > r.resetAt);
+    await DB.set('outbox', state.outbox).catch(() => {});
+    state.lastResetAt = r.resetAt;
+    await DB.set('lastResetAt', state.lastResetAt).catch(() => {});
+    if (state.lastResetAt && !fromZero) state.resetNotice = true;
+    fromZero = true;
+  }
   if (fromZero) {                                       // 처음/초기화 후: 시트 기준으로 다시 구성
     state.attend.clear(); state.approvals.clear();
     await DB.clear('attend').catch(() => {}); await DB.clear('approvals').catch(() => {});
@@ -1459,6 +1491,11 @@ async function syncTick(force = false) {
     if (state.view === 'view-list') renderList();
     if (state.view === 'view-approve') renderApprovals();
     if (state.view === 'view-session') renderSessionPicker();
+    if (state.resetNotice) {
+      state.resetNotice = false;
+      if (state.view === 'view-confirm' || state.view === 'view-cert') go('view-lookup');
+      lookupMsg('관리자가 구글 시트의 참석 기록을 전체 초기화했습니다. 이 기기의 기록도 비웠습니다.', 'warn');
+    }
     if (conflicts.length) alert(`다른 데스크에서 먼저 참석 처리된 ${conflicts.length}건이 있어 시트 기록으로 맞췄습니다.\n` +
       conflicts.map(c => `· ${c.name} (${c.desk}, ${c.checkinAt})`).join('\n'));
   }
@@ -1498,7 +1535,8 @@ async function connectSync(url, key) {
   state.lastSync = 0; state.lastFull = 0;
   await saveSettingsDb();
   // 시트에 아직 설정이 없으면(첫 연결) 이 기기에서 입력해 둔 설정을 시트로 올림
-  if (!sheetHasSettings) { state.outbox.push({ action: 'settings', data: sharedSettings() }); await DB.set('outbox', state.outbox).catch(() => {}); }
+  state.lastResetAt = r.resetAt || 0; await DB.set('lastResetAt', state.lastResetAt).catch(() => {});
+  if (!sheetHasSettings) { state.outbox.push({ action: 'settings', data: sharedSettings(), ts: Date.now() }); await DB.set('outbox', state.outbox).catch(() => {}); }
   await syncTick(true);
   return r.applicants ? r.applicants.length : 0;
 }
@@ -1579,6 +1617,7 @@ window.addEventListener('resize', () => {
   state.walkins = (await DB.get('walkins').catch(() => null)) || [];
   state.outbox = (await DB.get('outbox').catch(() => null)) || [];
   state.lastSync = (await DB.get('lastSync').catch(() => null)) || 0;
+  state.lastResetAt = (await DB.get('lastResetAt').catch(() => null)) || 0;
   updateSyncUi();
   await handleConnectLink();
   if (syncOn()) await syncTick(!state.applicants.length);

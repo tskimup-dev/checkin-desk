@@ -58,6 +58,7 @@ function doGet(e) {
   };
   const s = pullTable('settings', since)[0];
   if (s) o.settings = s;
+  o.resetAt = getResetAt();
   if (p.full === '1') o.applicants = readApplicants();
   return out(o);
 }
@@ -70,6 +71,10 @@ function doPost(e) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);                       // 여러 데스크 동시 접수 시 순서대로 처리
   try {
+    // 전체 초기화 이전에 만들어진 기록이 늦게 도착하면 버림 (설정은 제외)
+    if (b.ts && b.action !== 'settings' && b.action !== 'resetAll' && Number(b.ts) < getResetAt()) {
+      return out({ ok: true, dropped: true });
+    }
     switch (b.action) {
       case 'checkin': {                       // 같은 회차·같은 사람은 먼저 들어온 1건만 인정
         const ex = findRec('attend', b.rec.id);
@@ -94,6 +99,16 @@ function doPost(e) {
       case 'settings':
         upsert('settings', b.data, false);
         return out({ ok: true });
+      case 'resetAll': {                      // 참석기록·승인·현장신청 비우기 (명단·설정은 유지)
+        ['attend', 'approvals', 'walkins'].forEach(k => {
+          const sh = sheetOf(k);
+          const last = sh.getLastRow();
+          if (last > 1) sh.getRange(2, 1, last - 1, sh.getLastColumn()).clearContent();
+        });
+        const now = Date.now();
+        PropertiesService.getScriptProperties().setProperty('resetAt', String(now));
+        return out({ ok: true, resetAt: now });
+      }
       default:
         return out({ ok: false, error: 'action' });
     }
@@ -190,6 +205,10 @@ function pullTable(key, since) {
     rec.deleted = meta[i][1] === 'Y';
     return rec;
   });
+}
+
+function getResetAt() {
+  return Number(PropertiesService.getScriptProperties().getProperty('resetAt') || 0);
 }
 
 function out(o) {
