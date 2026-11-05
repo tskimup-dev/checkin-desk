@@ -1,18 +1,13 @@
 // 오프라인 동작용 서비스 워커
 // index.html을 고친 뒤 다시 올릴 때는 아래 VERSION 숫자를 올려 주세요.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = 'checkin-desk-' + VERSION;
-const JSQR = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     await c.addAll(SHELL);
-    try {                                   // QR 인식 모듈도 미리 받아둠 (아이폰 오프라인 스캔용)
-      const r = await fetch(JSQR, { mode: 'cors' });
-      if (r.ok) await c.put(JSQR, r);
-    } catch (err) {}
     self.skipWaiting();
   })());
 });
@@ -44,8 +39,8 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 아이콘·모듈 등: 저장본 우선
-  if (url.origin === location.origin || req.url === JSQR) {
+  // 아이콘 등: 저장본 우선
+  if (url.origin === location.origin) {
     e.respondWith((async () => {
       const hit = await caches.match(req.url);
       if (hit) return hit;
