@@ -498,6 +498,7 @@ const DB = {
 const DEFAULT_SETTINGS = {
   eventName: '2026년 태성회계법인 정산 설명회', issuer: '태성회계법인 정산 설명회 접수데스크', desk: '데스크 관리자',
   session: '', stamp: '', adminPin: '',
+  syncUrl: 'https://script.google.com/macros/s/AKfycbzaXaY_7UmpMUGZRErdCVHBIlXVhDyDBfTSquaVgKIgDznXWbjYdoKFOptMvTrMUJzkbQ/exec',   // 구글 시트 연동 주소 (비밀키는 기기마다 입력)
   sessionInfo: {
     S001: { date: '2026.12.01(화) 10:00', place: 'KTX 대전역 우암홀' },
     S002: { date: '2026.12.01(화) 14:00', place: 'KTX 대전역 우암홀' },
@@ -506,7 +507,7 @@ const DEFAULT_SETTINGS = {
   },
 };
 function applyDefaults(st) {
-  ['eventName', 'issuer', 'desk'].forEach(k => { if (!st[k]) st[k] = DEFAULT_SETTINGS[k]; });
+  ['eventName', 'issuer', 'desk', 'syncUrl'].forEach(k => { if (!st[k]) st[k] = DEFAULT_SETTINGS[k]; });
   const info = st.sessionInfo || {};
   Object.keys(DEFAULT_SETTINGS.sessionInfo).forEach(c => {
     const d = DEFAULT_SETTINGS.sessionInfo[c], cur = info[c] || {};
@@ -1592,7 +1593,7 @@ async function connectSync(url, key) {
   const r = await api({ action: 'pull', since: 0, full: 1 }, 'GET', { url, key });
   if (!r.ok) throw new Error(r.error || '연결 실패');
   const sheetHasSettings = !!r.settings;
-  const hadLocal = !state.settings.syncUrl && (state.attend.size || state.walkins.length);
+  const hadLocal = !syncOn() && (state.attend.size || state.walkins.length);
   if (hadLocal && !confirm('이 기기에 있던 참석 기록은 시트 기록으로 대체됩니다. 계속할까요?\n(필요하면 먼저 참석자 명단을 저장하세요)')) return null;
   state.settings.syncUrl = url; state.settings.syncKey = key;
   state.lastSync = 0; state.lastFull = 0;
@@ -1620,7 +1621,7 @@ async function disconnectSync() {
   if (!syncOn()) return;
   if (state.outbox.length && !confirm(`아직 시트로 보내지 못한 기록 ${state.outbox.length}건이 있습니다. 그래도 연동을 해제할까요?`)) return;
   if (!confirm('구글 시트 연동을 해제할까요? 이 기기에 받아둔 기록은 남아 있습니다.')) return;
-  state.settings.syncUrl = ''; state.settings.syncKey = '';
+  state.settings.syncKey = ''; state.settings.syncUrl = DEFAULT_SETTINGS.syncUrl;   // 주소는 고정, 비밀키만 지움
   await saveSettingsDb();
   updateSyncUi(); fillSyncForm();
 }
