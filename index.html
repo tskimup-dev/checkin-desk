@@ -507,6 +507,13 @@ const DEFAULT_SETTINGS = {
   },
 };
 function applyDefaults(st) {
+  // 예전 기본값이 그대로 저장된 기기는 새 기본값으로 한 번 바꿈
+  if (!st.defaultsV2) {
+    if (st.desk === '데스크1') st.desk = '';
+    if (st.eventName === '2026 연구개발사업 설명회') st.eventName = '';
+    if (st.issuer === '태성회계법인 정산 설명회 접수데스크') st.issuer = '';
+    st.defaultsV2 = true;
+  }
   ['eventName', 'issuer', 'desk', 'syncUrl'].forEach(k => { if (!st[k]) st[k] = DEFAULT_SETTINGS[k]; });
   const info = st.sessionInfo || {};
   Object.keys(DEFAULT_SETTINGS.sessionInfo).forEach(c => {
