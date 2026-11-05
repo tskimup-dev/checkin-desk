@@ -239,9 +239,23 @@
         <label>성명 *<input id="wName" autocomplete="off"></label>
         <label>휴대폰번호 *<input id="wPhone" inputmode="numeric" autocomplete="off" placeholder="01012345678 (- 없이)"></label>
         <label>연구개발기관명 *<input id="wOrg" autocomplete="off"></label>
-        <label>전문기관명 *<input id="wSpecOrg" autocomplete="off" list="specOrgList" placeholder="예: 정보통신기획평가원(IITP)"></label>
+        <label>전문기관명 *<select id="wSpecOrg">
+          <option value="">전문기관을 선택해 주세요</option>
+          <option value="한국산업기술기획평가원(KEIT)">한국산업기술기획평가원(KEIT)</option>
+          <option value="한국산업기술진흥원(KIAT)">한국산업기술진흥원(KIAT)</option>
+          <option value="한국에너지기술평가원(KETEP)">한국에너지기술평가원(KETEP)</option>
+          <option value="한국보건산업진흥원(KHIDI)">한국보건산업진흥원(KHIDI)</option>
+          <option value="중소기업기술정보진흥원(TIPA)">중소기업기술정보진흥원(TIPA)</option>
+          <option value="한국환경산업기술원(KEITI)">한국환경산업기술원(KEITI)</option>
+          <option value="농림식품기술기획평가원(IPET)">농림식품기술기획평가원(IPET)</option>
+          <option value="국토교통과학기술진흥원(KAIA)">국토교통과학기술진흥원(KAIA)</option>
+          <option value="해양수산과학기술진흥원(KIMST)">해양수산과학기술진흥원(KIMST)</option>
+          <option value="정보통신기획평가원(IITP)">정보통신기획평가원(IITP)</option>
+          <option value="우주항공청(KASA)">우주항공청(KASA)</option>
+          <option value="과학기술사업화진흥원(COMPA)">과학기술사업화진흥원(COMPA)</option>
+          <option value="한국산업안전보건공단(KOSHA)">한국산업안전보건공단(KOSHA)</option>
+        </select></label>
         <label>과제번호 (선택)<input id="wProject" autocomplete="off"></label>
-        <datalist id="specOrgList"></datalist>
       </div>
       <label class="row" style="font-size:14px;gap:8px;align-items:flex-start;flex-wrap:nowrap">
         <input type="checkbox" id="wAgree" style="width:auto;margin-top:3px">
@@ -751,8 +765,6 @@ function openWalkinForm() {
   if (!today()) return go('view-session');
   $('#walkinSess').textContent = `현재 회차 · ${sessLabel(today())}`;
   ['#wName', '#wPhone', '#wOrg', '#wSpecOrg', '#wProject'].forEach(s => $(s).value = '');
-  const specs = [...new Set(state.applicants.map(a => a.specOrg).filter(Boolean))].sort();   // 명단에 있는 전문기관 목록 제안
-  $('#specOrgList').innerHTML = specs.map(v => `<option value="${esc(v)}">`).join('');
   $('#wAgree').checked = false;
   $('#walkinMsg').innerHTML = '';
   setTimeout(() => $('#wName').focus(), 50);
@@ -775,7 +787,7 @@ async function submitWalkin() {
   if (!name) return err('성명을 입력해 주세요.');
   if (normPhone(phone).length < 10) return err('휴대폰번호를 정확히 입력해 주세요.');
   if (!org) return err('연구개발기관명을 입력해 주세요.');
-  if (!specOrg) return err('전문기관명을 입력해 주세요.');
+  if (!specOrg) return err('전문기관을 선택해 주세요.');
   if (!$('#wAgree').checked) return err('개인정보 수집·이용에 동의해 주세요.');
 
   const p = normPhone(phone);
