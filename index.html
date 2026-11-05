@@ -37,42 +37,38 @@
   .muted{color:var(--muted)}
   .center{text-align:center}
 
-  /* ---------- 왼쪽 사이드바 ---------- */
-  :root{--side-w:252px}
-  body{padding-left:var(--side-w)}
-  .side{position:fixed;top:0;left:0;bottom:0;width:var(--side-w);z-index:30;background:#fbfbfa;border-right:1px solid var(--line);
-    display:flex;flex-direction:column;gap:14px;padding:18px 12px;padding-top:max(18px,env(safe-area-inset-top));overflow-y:auto}
-  .side-brand{padding:0 8px}
-  #hdrEvent{font-weight:700;font-size:16px;line-height:1.35;word-break:keep-all}
-  #hdrSub{font-size:13px;color:var(--muted);margin-top:2px}
-  #sessPill{width:100%;display:flex;align-items:center;gap:8px;text-align:left;background:var(--primary-bg);border-color:#c6d8f3;color:var(--primary);font-size:14px;padding:10px 12px}
-  #sessPill b{font-size:16px;flex:1}
+  /* ---------- 상단 고정 메뉴 (틀 고정처럼 스크롤해도 항상 위에) ---------- */
+  header.top{position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 1px 4px rgba(0,0,0,.04);
+    display:flex;align-items:center;gap:12px;padding:10px 20px;padding-top:max(10px,env(safe-area-inset-top));flex-wrap:wrap}
+  .side-brand{min-width:0;max-width:280px}
+  #hdrEvent{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #hdrSub{font-size:12px;color:var(--muted)}
+  #sessPill{display:inline-flex;align-items:center;gap:6px;background:var(--primary-bg);border-color:#c6d8f3;color:var(--primary);font-size:13px;padding:7px 12px;white-space:nowrap}
+  #sessPill b{font-size:15px}
   #sessPill small{font-size:12px;opacity:.8}
-  .stats{font-size:14px;color:var(--muted);padding:0 8px}
-  .stats b{color:var(--text);font-size:17px}
+  .stats{font-size:14px;color:var(--muted);white-space:nowrap}
+  .stats b{color:var(--text);font-size:16px}
   .ico{width:18px;height:18px;flex:none}
-  nav{display:flex;flex-direction:column;gap:2px}
-  nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:transparent;border-radius:8px;padding:10px 12px;font-size:15px;color:#3b4552}
+  nav{display:flex;gap:2px;margin-left:auto}
+  nav button{display:flex;align-items:center;gap:6px;border:0;background:transparent;border-radius:8px;padding:8px 12px;font-size:15px;color:#3b4552;white-space:nowrap}
   nav button:hover{background:#eef0f3}
   nav button.active{background:var(--primary-bg);color:var(--primary);font-weight:600}
-  .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:0 4px}
-  .side-foot .sync{align-self:flex-start}
-  #btnLock{display:flex;align-items:center;gap:8px;justify-content:center;font-size:14px}
-  .mobilebar{display:none}
-  #sideOverlay{display:none}
-  .badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--err);color:#fff;font-size:12px;line-height:20px;text-align:center;margin-left:auto}
-  @media (max-width:900px){
-    body{padding-left:0}
-    .side{transform:translateX(-100%);transition:transform .2s ease;box-shadow:0 0 24px rgba(0,0,0,.12)}
-    body.menu-open .side{transform:none}
-    body.menu-open #sideOverlay{display:block;position:fixed;inset:0;background:rgba(15,23,35,.35);z-index:25}
-    .mobilebar{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line);
-      padding:8px 12px;padding-top:max(8px,env(safe-area-inset-top))}
-    .mobilebar #btnMenu{border:0;background:transparent;padding:8px;display:flex}
-    .mobilebar #btnMenu .ico{width:24px;height:24px}
-    #mbTitle{flex:1;min-width:0;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    #mbSess{font-size:13px;font-weight:600;color:var(--primary);background:var(--primary-bg);border-radius:999px;padding:4px 10px;white-space:nowrap;border:0}
+  .side-foot{display:flex;align-items:center;gap:8px}
+  #btnLock{display:flex;align-items:center;gap:6px;font-size:13px;padding:7px 10px;white-space:nowrap}
+  .badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--err);color:#fff;font-size:12px;line-height:20px;text-align:center;margin-left:2px}
+  @media (max-width:760px){
+    header.top{gap:8px;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top))}
+    .side-brand{flex:1;max-width:none}
+    #hdrSub{display:none}
+    .stats{font-size:12px}
+    .stats b{font-size:14px}
+    nav{order:10;width:100%;margin-left:0}
+    nav button{flex:1;justify-content:center;gap:4px;padding:7px 2px;font-size:13px}
+    nav .ico{width:16px;height:16px}
+    .side-foot:not(:has(:not(.hidden))){display:none}
+    #btnLock{font-size:0;gap:0;padding:7px}            /* 휴대폰에서는 자물쇠 아이콘만 */
   }
+
   .badge:empty,.badge[data-n="0"]{display:none}
 
   main{max-width:1440px;margin:24px auto;padding:0 24px}
@@ -185,13 +181,7 @@
 </head>
 <body>
 
-<div class="mobilebar">
-  <button type="button" id="btnMenu" aria-label="메뉴 열기"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-  <div id="mbTitle">설명회 접수데스크</div>
-  <button type="button" id="mbSess" data-go="view-session">회차 선택</button>
-</div>
-<div id="sideOverlay"></div>
-<aside class="side" id="sidebar">
+<header class="top">
   <div class="side-brand">
     <div id="hdrEvent">설명회 접수데스크</div>
     <div id="hdrSub"></div>
@@ -208,7 +198,7 @@
     <span id="syncStatus" class="sync hidden"></span>
     <button type="button" id="btnLock" class="hidden"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>관리자 잠금</button>
   </div>
-</aside>
+</header>
 
 <main>
   <!-- 0. 회차 선택 -->
@@ -606,7 +596,6 @@ function askPin(reason, force = false) {
 /* ===================== 화면 전환 ===================== */
 function go(id) {
   state.view = id;
-  document.body.classList.remove('menu-open');
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('hidden', v.id !== id));
   const navOf = { 'view-confirm': 'view-lookup', 'view-cert': 'view-lookup', 'view-walkin': 'view-lookup' };
   document.querySelectorAll('nav [data-go]').forEach(b => b.classList.toggle('active', b.dataset.go === (navOf[id] || id)));
@@ -624,8 +613,6 @@ function refreshHeader() {
   $('#hdrEvent').textContent = s.eventName || '설명회 접수데스크';
   $('#hdrSub').textContent = s.desk || '';
   $('#sessPillName').textContent = t ? sessName(t) : '회차 선택';
-  $('#mbTitle').textContent = s.eventName || '설명회 접수데스크';
-  $('#mbSess').textContent = t ? sessName(t) : '회차 선택';
   $('#lookupSess').textContent = t ? `현재 회차 · ${sessLabel(t)}` : '회차가 선택되지 않았습니다';
   $('#cntIn').textContent = t ? attendFor(t).length : 0;
   $('#cntAll').textContent = t ? rosterBase(t).length : 0;
@@ -1347,8 +1334,6 @@ $('#btnStampDel').addEventListener('click', async () => {
   $('#stampPreview').classList.add('hidden');
   await saveSettingsDb(); pushSettings();
 });
-$('#btnMenu').addEventListener('click', () => document.body.classList.toggle('menu-open'));
-$('#sideOverlay').addEventListener('click', () => document.body.classList.remove('menu-open'));
 $('#btnLock').addEventListener('click', () => {
   state.adminUntil = 0; refreshAdminUi();
   if (['view-approve', 'view-setup'].includes(state.view)) go('view-lookup');
