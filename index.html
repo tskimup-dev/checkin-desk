@@ -126,8 +126,9 @@
   table{width:100%;border-collapse:collapse;font-size:14px}
   th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;word-break:keep-all}
   th,td.nw{white-space:nowrap}
-  td.rno{word-break:break-all;min-width:150px;font-size:13px}
-  td.org{min-width:140px}
+  td.rno{word-break:break-all;min-width:120px;font-size:13px}
+  td.pno{word-break:break-all;min-width:80px;font-size:13px}
+  td.org{min-width:100px}
   th{background:#f7f8fa;position:sticky;top:0;z-index:1}
   td.sig{width:130px;height:46px;padding:2px 6px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
   td.sig img{height:40px;display:block}
@@ -293,7 +294,7 @@
           <button type="button" data-filter="in">참석 <span id="fIn">0</span></button>
           <button type="button" data-filter="out">미참석 <span id="fOut">0</span></button>
         </div>
-        <input id="listSearch" placeholder="이름·기관·접수번호 검색">
+        <input id="listSearch" placeholder="이름·기관·과제번호·접수번호 검색">
       </div>
       <div class="table-wrap">
         <table>
@@ -1041,7 +1042,7 @@ function renderList() {
   const isAll = code === 'ALL';
   $('#listSession').innerHTML = `<option value="ALL" ${isAll ? 'selected' : ''}>전체 회차 (통합)</option>` + SESSIONS.map(s =>
     `<option value="${s.code}" ${s.code === code ? 'selected' : ''}>${esc(s.name)} (${s.code})${s.code === today() ? ' · 현재' : ''}</option>`).join('');
-  $('#listHead').innerHTML = `<tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>성명</th><th>기관</th><th>접수번호</th><th>참석</th><th>서명</th><th>비고</th><th></th></tr>`;
+  $('#listHead').innerHTML = `<tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>성명</th><th>연구개발기관명</th><th>과제번호</th><th>전문기관</th><th>접수번호</th><th>참석</th><th>서명</th><th>비고</th><th></th></tr>`;
 
   const all = buildRoster(code);
   const nIn = all.filter(r => r.rec).length;
@@ -1051,7 +1052,7 @@ function renderList() {
   const q = $('#listSearch').value.trim().toLowerCase();
   const rows = all.map((r, i) => ({ ...r, no: i + 1 }))
     .filter(r => state.listFilter === 'all' || (state.listFilter === 'in' ? r.rec : !r.rec))
-    .filter(r => !q || [r.a.name, r.a.org, r.a.receiptNo, r.a.projectNo].some(v => String(v || '').toLowerCase().includes(q)));
+    .filter(r => !q || [r.a.name, r.a.org, r.a.specOrg, r.a.receiptNo, r.a.projectNo].some(v => String(v || '').toLowerCase().includes(q)));
 
   $('#listBody').innerHTML = rows.length ? rows.map(r => {
     const note = !r.walkin ? '' : r.source === 'walkin' ? '<span class="pill warn">현장 신청</span>'
@@ -1061,11 +1062,11 @@ function renderList() {
                          <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
     else if (r.sess === today()) action = `<button type="button" class="small" data-open="${esc(r.a.receiptNo)}">접수 처리</button>`;
     return `<tr class="${r.rec ? '' : 'absent'}">
-      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="rno">${esc(r.a.receiptNo)}</td>
+      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="pno">${esc(r.a.projectNo)}</td><td class="org">${esc(r.a.specOrg || '')}</td><td class="rno">${esc(r.a.receiptNo)}</td>
       <td class="nw">${r.rec ? `<span class="pill ok">참석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미참석</span>'}</td>
       <td class="sig">${r.rec ? `<img src="${r.rec.sig}" alt="서명">` : ''}</td>
       <td>${note}</td><td class="nw">${action}</td></tr>`;
-  }).join('') : `<tr><td colspan="${isAll ? 9 : 8}" class="empty">${all.length ? '조건에 맞는 사람이 없습니다.' : '이 회차의 CONFIRMED 신청자가 없습니다.'}</td></tr>`;
+  }).join('') : `<tr><td colspan="${isAll ? 11 : 10}" class="empty">${all.length ? '조건에 맞는 사람이 없습니다.' : '이 회차의 CONFIRMED 신청자가 없습니다.'}</td></tr>`;
 }
 
 function exportCsv() {
@@ -1088,7 +1089,7 @@ function exportRoster() {
   const s = state.settings, info = isAll ? {} : sessionInfo(code);
   const nIn = all.filter(r => r.rec).length;
   const rows = all.map((r, i) => `
-    <tr><td>${i + 1}</td>${isAll ? `<td>${esc(sessName(r.sess))}</td>` : ''}<td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.receiptNo)}</td>
+    <tr><td>${i + 1}</td>${isAll ? `<td>${esc(sessName(r.sess))}</td>` : ''}<td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.specOrg || '')}</td><td>${esc(r.a.receiptNo)}</td>
       <td>${r.rec ? esc(r.rec.checkinAt.slice(11)) : ''}</td><td class="sig">${r.rec ? `<img src="${r.rec.sig}">` : ''}</td>
       <td>${r.walkin ? sourceLabel(r) : ''}</td></tr>`).join('');
   const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>서명 참석자 명단 - ${esc(isAll ? '전체 회차' : sessName(code))}</title>
@@ -1098,7 +1099,7 @@ th,td{border:1px solid #999;padding:4px 6px;text-align:center}th{background:#eee
 td.sig{width:140px;height:46px;padding:2px}td.sig img{height:40px}tr{page-break-inside:avoid}</style></head><body>
 <h1>${esc(s.eventName)} · ${esc(isAll ? '전체 회차' : sessLabel(code))} 참석자 서명부</h1>
 <p>${esc([info.date, info.place].filter(Boolean).join(' · '))} · 대상 ${all.length}명 · 참석 ${nIn}명 · 미참석 ${all.length - nIn}명 · 출력 ${esc(fmt(new Date()))}</p>
-<table><thead><tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>성명</th><th>기관</th><th>과제번호</th><th>접수번호</th><th>참석시각</th><th>서명</th><th>비고</th></tr></thead>
+<table><thead><tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>성명</th><th>연구개발기관명</th><th>과제번호</th><th>전문기관</th><th>접수번호</th><th>참석시각</th><th>서명</th><th>비고</th></tr></thead>
 <tbody>${rows}</tbody></table></body></html>`;
   download(`서명참석자명단_${isAll ? '전체회차' : sessName(code) || code}_${fileStamp()}.html`, html, 'text/html;charset=utf-8');
 }
