@@ -327,15 +327,23 @@
   <!-- 5. 승인 관리 -->
   <section id="view-approve" class="view hidden">
     <div class="card">
-      <h2>승인 대기 · <span id="apSession"></span></h2>
-      <p class="muted" style="margin:0 0 12px">다른 회차 신청자가 현재 회차에 참석하려고 요청한 목록입니다. 승인 후 [서명 진행]으로 바로 접수할 수 있습니다.</p>
+      <div class="toolbar">
+        <select id="apFilter"></select>
+        <div class="tabs">
+          <button type="button" data-apkind="all">전체</button>
+          <button type="button" data-apkind="other">회차 변경</button>
+          <button type="button" data-apkind="walkin">현장 신청</button>
+        </div>
+      </div>
+      <h2>승인 대기 <span class="badge" id="apPendN" data-n="0" style="vertical-align:2px"></span></h2>
+      <p class="muted" style="margin:0 0 12px">다른 회차로 참석하려는 사전 신청자(회차 변경)와 현장 신청자의 승인 요청입니다. 현재 회차 요청은 승인 후 [서명 진행]으로 바로 접수할 수 있습니다.</p>
       <div id="apPending"></div>
     </div>
     <div class="card">
       <h2>처리 내역</h2>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>성명</th><th>기관</th><th>접수번호</th><th>신청 회차</th><th>결과</th><th>처리 시각</th><th></th></tr></thead>
+          <thead><tr><th>구분</th><th>성명</th><th>연구개발기관명</th><th>접수번호</th><th>신청 회차</th><th>참석 회차</th><th>결과</th><th>처리 시각</th><th></th></tr></thead>
           <tbody id="apDone"></tbody>
         </table>
       </div>
@@ -635,7 +643,7 @@ function refreshHeader() {
   $('#lookupSess').textContent = t ? `현재 회차 · ${sessLabel(t)}` : '회차가 선택되지 않았습니다';
   $('#cntIn').textContent = t ? attendFor(t).length : 0;
   $('#cntAll').textContent = t ? rosterBase(t).length : 0;
-  const pending = [...state.approvals.values()].filter(x => x.session === t && x.status === 'pending').length;
+  const pending = [...state.approvals.values()].filter(x => x.status === 'pending').length;
   $('#apBadge').textContent = pending || ''; $('#apBadge').dataset.n = pending;
   document.title = `${t ? sessName(t) + ' - ' : ''}${s.eventName || '접수데스크'}`;
 }
@@ -850,16 +858,30 @@ async function setDecision(id, status) {
 
 function renderApprovals() {
   const t = today();
-  $('#apSession').textContent = t ? sessLabel(t) : '회차 미선택';
-  const list = [...state.approvals.values()].filter(x => x.session === t)
-    .sort((a, b) => b.requestedISO.localeCompare(a.requestedISO));
+  if (!state.apFilter) state.apFilter = 'ALL';
+  if (!state.apKind) state.apKind = 'all';
+  $('#apFilter').innerHTML = `<option value="ALL">전체 회차</option>` + SESSIONS.map(s =>
+    `<option value="${s.code}" ${s.code === state.apFilter ? 'selected' : ''}>${esc(s.name)} (${s.code})${s.code === t ? ' · 현재' : ''}</option>`).join('');
+  $('#apFilter').value = state.apFilter;
+  document.querySelectorAll('[data-apkind]').forEach(b => b.classList.toggle('active', b.dataset.apkind === state.apKind));
+
+  const kindOf = x => x.walkin ? 'walkin' : 'other';
+  const list = [...state.approvals.values()]
+    .filter(x => state.apFilter === 'ALL' || x.session === state.apFilter)
+    .filter(x => state.apKind === 'all' || kindOf(x) === state.apKind)
+    .sort((a, b) => (b.requestedISO || '').localeCompare(a.requestedISO || ''));
   const pend = list.filter(x => x.status === 'pending');
   const done = list.filter(x => x.status !== 'pending');
+  $('#apPendN').textContent = pend.length || ''; $('#apPendN').dataset.n = pend.length;
+
+  const kindPill = x => x.walkin ? '<span class="pill warn">현장 신청</span>' : '<span class="pill" style="background:var(--primary-bg);color:var(--primary)">회차 변경</span>';
+  const route = x => x.walkin ? `현장 신청 → <b>${esc(sessName(x.session))}</b>`
+    : `<b>${esc(sessName(x.appliedSession) || '회차 미확인')}</b> 신청 → <b>${esc(sessName(x.session))}</b> 참석`;
 
   $('#apPending').innerHTML = pend.length ? pend.map(x => `
     <div class="ap-card">
-      <div><div class="nm">${esc(x.name)} <span class="muted" style="font-size:15px;font-weight:400">${esc(x.org)}</span></div>
-        <div class="muted" style="font-size:14px">${esc(x.receiptNo)} · ${x.walkin ? '<b>현장 신청</b>' : `신청 회차 <b>${esc(sessLabel(x.appliedSession))}</b> → 현재 <b>${esc(sessName(t))}</b>`} · 요청 ${esc(x.requestedAt.slice(11))} ${esc(x.desk)}</div></div>
+      <div><div class="nm">${kindPill(x)} ${esc(x.name)} <span class="muted" style="font-size:15px;font-weight:400">${esc(x.org)}</span></div>
+        <div class="muted" style="font-size:14px">${route(x)} · ${esc(x.receiptNo)} · 요청 ${esc((x.requestedAt || '').slice(5))} ${esc(x.desk)}</div></div>
       <div style="display:flex;gap:8px">
         <button type="button" class="danger" data-decide="rejected" data-id="${esc(x.id)}">거절</button>
         <button type="button" class="primary" data-decide="approved" data-id="${esc(x.id)}">승인</button>
@@ -870,11 +892,13 @@ function renderApprovals() {
     const attended = state.attend.has(x.id);
     const action = x.status !== 'approved' ? ''
       : attended ? '<span class="pill ok">참석 완료</span>'
-      : `<button type="button" class="small primary" data-sign="${esc(x.receiptNo)}">서명 진행</button>`;
-    return `<tr><td class="nw">${esc(x.name)}</td><td class="org">${esc(x.org)}</td><td class="rno">${esc(x.receiptNo)}</td><td>${x.walkin ? '현장 신청' : esc(sessLabel(x.appliedSession))}</td>
-      <td>${x.status === 'approved' ? '<span class="pill ok">승인</span>' : '<span class="pill err">거절</span>'}</td>
+      : x.session === t ? `<button type="button" class="small primary" data-sign="${esc(x.receiptNo)}">서명 진행</button>`
+      : '<span class="pill no">미참석</span>';
+    return `<tr><td class="nw">${kindPill(x)}</td><td class="nw">${esc(x.name)}</td><td class="org">${esc(x.org)}</td><td class="rno">${esc(x.receiptNo)}</td>
+      <td class="nw">${x.walkin ? '-' : esc(sessName(x.appliedSession) || '회차 미확인')}</td><td class="nw">${esc(sessName(x.session))}</td>
+      <td class="nw">${x.status === 'approved' ? '<span class="pill ok">승인</span>' : '<span class="pill err">거절</span>'}</td>
       <td class="nw">${esc(x.decidedAt)}</td><td class="nw">${action}</td></tr>`;
-  }).join('') : '<tr><td colspan="7" class="empty">처리 내역이 없습니다.</td></tr>';
+  }).join('') : '<tr><td colspan="9" class="empty">처리 내역이 없습니다.</td></tr>';
 }
 
 /* ===================== 서명 패드 ===================== */
@@ -1326,6 +1350,7 @@ $('#btnSyncSave').addEventListener('click', saveSync);
 $('#btnSyncOff').addEventListener('click', disconnectSync);
 $('#btnSyncQr').addEventListener('click', showSyncQr);
 $('#btnNext').addEventListener('click', () => { $('#q').value = ''; lookupMsg(''); go('view-lookup'); });
+$('#apFilter').addEventListener('change', e => { state.apFilter = e.target.value; renderApprovals(); });
 $('#listSession').addEventListener('change', e => { state.listSession = e.target.value; renderList(); });
 $('#listSearch').addEventListener('input', renderList);
 $('#btnCsv').addEventListener('click', exportCsv);
@@ -1348,13 +1373,14 @@ $('#btnLock').addEventListener('click', () => {
 });
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-go],[data-filter],[data-open],[data-cert],[data-del],[data-pick-session],[data-req],[data-decide],[data-sign]');
+  const t = e.target.closest('[data-go],[data-apkind],[data-filter],[data-open],[data-cert],[data-del],[data-pick-session],[data-req],[data-decide],[data-sign]');
   if (!t) return;
   const d = t.dataset;
   if (d.go) {
     if (d.admin && !await askPin(d.admin)) return;
     return go(d.go);
   }
+  if (d.apkind) { state.apKind = d.apkind; return renderApprovals(); }
   if (d.filter) { state.listFilter = d.filter; return renderList(); }
   if (d.pickSession) return pickSession(d.pickSession);
   if (d.open) { const a = findApplicant(d.open); if (a) openApplicant(a); return; }
