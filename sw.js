@@ -1,6 +1,6 @@
 // 오프라인 동작용 서비스 워커
 // index.html을 고친 뒤 다시 올릴 때는 아래 VERSION 숫자를 올려 주세요.
-const VERSION = 'v19';
+const VERSION = 'v20';
 const CACHE = 'checkin-desk-' + VERSION;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
