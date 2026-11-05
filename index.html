@@ -1221,8 +1221,10 @@ function showImportInfo() {
   const otherText = Object.entries(others).map(([k, v]) => `${esc(k)} ${v}명`).join(', ');
   const perSess = SESSIONS.map(s => `${esc(s.name)} ${ok.filter(a => a.session === s.code).length}명`).join(' · ');
   const unknown = ok.filter(a => !a.session).length;
+  const sciPhone = state.applicants.filter(a => /e\+/i.test(a.phone || '')).length;
   $('#importInfo').innerHTML = `<div class="msg ${ok.length ? 'ok' : 'err'}">
       현재 명단: 전체 <b>${n}명</b> 중 <b>CONFIRMED ${ok.length}명</b>${otherText ? ` · 참석 불가: ${otherText}` : ''}<br>회차별: ${perSess}</div>` +
+    (sciPhone ? `<div class="msg err">휴대폰번호 ${sciPhone}건이 <b>1.10E+09</b> 같은 지수 표기로 들어와 휴대폰번호로 조회할 수 없습니다. 구글 시트에서 휴대폰번호 열을 선택하고 <b>서식 → 숫자 → 일반 텍스트</b>로 바꾼 뒤 다시 내려받아 주세요.</div>` : '') +
     (unknown ? `<div class="msg warn">회차를 알 수 없는 CONFIRMED 신청자 ${unknown}명 — 접수번호에 S001~S004가 없고 회차 열로도 구분되지 않습니다. 이 사람들은 관리자 승인 후에만 접수됩니다.</div>` : '');
 }
 

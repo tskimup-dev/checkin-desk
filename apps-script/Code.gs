@@ -124,7 +124,9 @@ function readApplicants() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   for (const sh of ss.getSheets()) {
     if (OWN_TABS.indexOf(sh.getName()) >= 0) continue;
-    const values = sh.getDataRange().getDisplayValues();
+    const range = sh.getDataRange();
+    const values = range.getDisplayValues();
+    const raw = range.getValues();               // 휴대폰번호는 화면 표시(1.10E+09 등)가 아닌 실제 값으로 읽음
     if (values.length < 1) continue;
     const H = values[0].map(h => String(h).replace(/\s/g, '').toLowerCase());
     const col = keys => { for (const k of keys) { const i = H.findIndex(h => h.indexOf(k) >= 0); if (i >= 0) return i; } return -1; };
@@ -135,9 +137,14 @@ function readApplicants() {
     };
     if (ix.receiptNo < 0 || ix.name < 0 || ix.status < 0) continue;
     const g = (r, k) => ix[k] >= 0 ? String(r[ix[k]] || '').trim() : '';
-    return values.slice(1).map(r => ({
+    const phoneOf = i => {
+      if (ix.phone < 0) return '';
+      const v = raw[i][ix.phone];
+      return typeof v === 'number' ? String(Math.round(v)) : String(v || '').trim();
+    };
+    return values.slice(1).map((r, i) => ({
       receiptNo: g(r, 'receiptNo'), name: g(r, 'name'), sessionText: g(r, 'sessionText'),
-      projectNo: g(r, 'projectNo'), org: g(r, 'org'), phone: g(r, 'phone'), status: g(r, 'status'),
+      projectNo: g(r, 'projectNo'), org: g(r, 'org'), phone: phoneOf(i + 1), status: g(r, 'status'),
     })).filter(a => a.receiptNo);
   }
   return [];
