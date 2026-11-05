@@ -719,7 +719,7 @@ function openApplicant(a) {
     if (ap && ap.status === 'rejected') status = `<div style="margin-top:6px">✕ 이전 요청이 거절되었습니다 (${esc(ap.decidedAt)})</div>`;
     return lookupMsg(`<b>${esc(a.name)}</b>님(${esc(a.org)})은 ${applied}.<br>
       현재 회차(<b>${esc(sessLabel(t))}</b>)에 참석하려면 <b>관리자 승인</b>이 필요합니다.${status}
-      ${!ap || ap.status === 'rejected' ? `<div class="btns"><button type="button" class="small primary" data-req="${esc(a.receiptNo)}">관리자에게 참석 승인 요청 등록하기</button></div>` : ''}`, 'warn');
+      ${!ap || ap.status === 'rejected' ? `<div class="btns"><button type="button" class="small primary" data-req="${esc(a.receiptNo)}">${a.walkin ? '관리자에게 참석 승인 요청 등록하기' : '관리자에게 참석 일정 변경 승인 요청하기'}</button></div>` : ''}`, 'warn');
   }
   beep(true);
   openConfirm(a, false);
