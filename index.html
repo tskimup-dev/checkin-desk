@@ -155,6 +155,8 @@
   #stampPreview{width:64px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
   textarea{margin-top:10px;font-size:13px;font-family:ui-monospace,Consolas,monospace}
 
+  button.yellow{background:#ffd43b;border-color:#f5c518;color:#3d2e00;font-weight:600}
+  button.yellow:hover{background:#fcc419}
   .sync{font-size:13px;font-weight:600;padding:5px 10px;border-radius:999px;white-space:nowrap}
   .sync.ok{background:var(--ok-bg);color:var(--ok)}
   .sync.off{background:var(--warn-bg);color:var(--warn)}
@@ -231,7 +233,7 @@
       <div id="lookupMsg"></div>
       <div style="margin-top:22px;padding-top:16px;border-top:1px solid var(--line)">
         <span class="muted">사전 신청을 하지 않으셨나요?</span>
-        <button type="button" class="small" data-go="view-walkin" style="margin-left:6px">현장 신청</button>
+        <button type="button" class="small yellow" data-go="view-walkin" style="margin-left:6px">현장 신청</button>
       </div>
     </div>
   </section>
@@ -303,7 +305,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>No</th><th>성명</th><th>기관</th><th>접수번호</th><th>참석</th><th>서명</th><th>비고</th><th></th></tr></thead>
+          <thead id="listHead"></thead>
           <tbody id="listBody"></tbody>
         </table>
       </div>
@@ -687,7 +689,7 @@ function handleQuery(raw) {
   if (!matches.length) {
     beep(false);
     return lookupMsg(`<b>${esc(q)}</b> — 참석 확인이 가능한 신청 내역이 없습니다. 번호를 다시 확인해 주세요.
-      <div class="btns"><button type="button" class="small" data-go="view-walkin">현장 신청하기</button></div>`);
+      <div class="btns"><button type="button" class="small yellow" data-go="view-walkin">현장 신청하기</button></div>`);
   }
   if (matches.length === 1) return openApplicant(matches[0]);
 
@@ -1042,6 +1044,7 @@ function loadScript(src) {
 /* ===================== 참석자 명단 ===================== */
 // 회차의 전체 명단(신청 순서) + 승인받아 참석한 타 회차 신청자
 function buildRoster(code) {
+  if (code === 'ALL') return SESSIONS.flatMap(s => buildRoster(s.code));   // 전체 회차 통합
   const base = rosterBase(code).map(a => ({ a, rec: state.attend.get(key(code, a.receiptNo)) || null, walkin: false }));
   const inBase = new Set(base.map(r => r.a.receiptNo));
   const extra = attendFor(code).filter(r => !inBase.has(r.receiptNo))
@@ -1050,13 +1053,15 @@ function buildRoster(code) {
       a: { receiptNo: r.receiptNo, name: r.name, org: r.org, projectNo: r.projectNo, phone: r.phone, session: r.appliedSession },
       rec: r, walkin: true, source: r.source,
     }));
-  return base.concat(extra);
+  return base.concat(extra).map(r => ({ ...r, sess: code }));
 }
 
 function renderList() {
   const code = state.listSession;
-  $('#listSession').innerHTML = SESSIONS.map(s =>
+  const isAll = code === 'ALL';
+  $('#listSession').innerHTML = `<option value="ALL" ${isAll ? 'selected' : ''}>전체 회차 (통합)</option>` + SESSIONS.map(s =>
     `<option value="${s.code}" ${s.code === code ? 'selected' : ''}>${esc(s.name)} (${s.code})${s.code === today() ? ' · 현재' : ''}</option>`).join('');
+  $('#listHead').innerHTML = `<tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>성명</th><th>기관</th><th>접수번호</th><th>참석</th><th>서명</th><th>비고</th><th></th></tr>`;
 
   const all = buildRoster(code);
   const nIn = all.filter(r => r.rec).length;
@@ -1074,13 +1079,13 @@ function renderList() {
     let action = '';
     if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
                          <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
-    else if (code === today()) action = `<button type="button" class="small" data-open="${esc(r.a.receiptNo)}">접수 처리</button>`;
+    else if (r.sess === today()) action = `<button type="button" class="small" data-open="${esc(r.a.receiptNo)}">접수 처리</button>`;
     return `<tr class="${r.rec ? '' : 'absent'}">
-      <td class="nw">${r.no}</td><td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="rno">${esc(r.a.receiptNo)}</td>
+      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="rno">${esc(r.a.receiptNo)}</td>
       <td class="nw">${r.rec ? `<span class="pill ok">참석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미참석</span>'}</td>
       <td class="sig">${r.rec ? `<img src="${r.rec.sig}" alt="서명">` : ''}</td>
       <td>${note}</td><td class="nw">${action}</td></tr>`;
-  }).join('') : `<tr><td colspan="8" class="empty">${all.length ? '조건에 맞는 사람이 없습니다.' : '이 회차의 CONFIRMED 신청자가 없습니다.'}</td></tr>`;
+  }).join('') : `<tr><td colspan="${isAll ? 9 : 8}" class="empty">${all.length ? '조건에 맞는 사람이 없습니다.' : '이 회차의 CONFIRMED 신청자가 없습니다.'}</td></tr>`;
 }
 
 function exportCsv() {
@@ -1089,9 +1094,9 @@ function exportCsv() {
   if (!all.length) return alert('이 회차의 명단이 없습니다.');
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
   const head = ['No', '참석 회차', '접수번호', '신청 회차', '성명', '연구개발기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
-  const rows = all.map((r, i) => [i + 1, sessLabel(code), r.a.receiptNo, r.source === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.projectNo,
+  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), r.a.receiptNo, r.source === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.projectNo,
     formatPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' (관리자 승인)' : '', r.rec ? r.rec.desk : '']);
-  download(`참석자명단_${sessName(code) || code}_${fileStamp()}.csv`,
+  download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 }
 
@@ -1099,22 +1104,23 @@ function exportRoster() {
   const code = state.listSession;
   const all = buildRoster(code);
   if (!all.length) return alert('이 회차의 명단이 없습니다.');
-  const s = state.settings, info = sessionInfo(code);
+  const isAll = code === 'ALL';
+  const s = state.settings, info = isAll ? {} : sessionInfo(code);
   const nIn = all.filter(r => r.rec).length;
   const rows = all.map((r, i) => `
-    <tr><td>${i + 1}</td><td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.receiptNo)}</td>
+    <tr><td>${i + 1}</td>${isAll ? `<td>${esc(sessName(r.sess))}</td>` : ''}<td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.receiptNo)}</td>
       <td>${r.rec ? esc(r.rec.checkinAt.slice(11)) : ''}</td><td class="sig">${r.rec ? `<img src="${r.rec.sig}">` : ''}</td>
       <td>${r.walkin ? sourceLabel(r) : ''}</td></tr>`).join('');
-  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>서명 참석자 명단 - ${esc(sessName(code))}</title>
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>서명 참석자 명단 - ${esc(isAll ? '전체 회차' : sessName(code))}</title>
 <style>body{font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;margin:24px}h1{font-size:22px;margin:0 0 4px}
 p{margin:0 0 16px;color:#555}table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{border:1px solid #999;padding:4px 6px;text-align:center}th{background:#eee}
 td.sig{width:140px;height:46px;padding:2px}td.sig img{height:40px}tr{page-break-inside:avoid}</style></head><body>
-<h1>${esc(s.eventName)} · ${esc(sessLabel(code))} 참석자 서명부</h1>
+<h1>${esc(s.eventName)} · ${esc(isAll ? '전체 회차' : sessLabel(code))} 참석자 서명부</h1>
 <p>${esc([info.date, info.place].filter(Boolean).join(' · '))} · 대상 ${all.length}명 · 참석 ${nIn}명 · 미참석 ${all.length - nIn}명 · 출력 ${esc(fmt(new Date()))}</p>
-<table><thead><tr><th>No</th><th>성명</th><th>기관</th><th>과제번호</th><th>접수번호</th><th>참석시각</th><th>서명</th><th>비고</th></tr></thead>
+<table><thead><tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>성명</th><th>기관</th><th>과제번호</th><th>접수번호</th><th>참석시각</th><th>서명</th><th>비고</th></tr></thead>
 <tbody>${rows}</tbody></table></body></html>`;
-  download(`서명참석자명단_${sessName(code) || code}_${fileStamp()}.html`, html, 'text/html;charset=utf-8');
+  download(`서명참석자명단_${isAll ? '전체회차' : sessName(code) || code}_${fileStamp()}.html`, html, 'text/html;charset=utf-8');
 }
 
 async function deleteAttend(id) {
