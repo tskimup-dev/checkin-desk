@@ -238,7 +238,9 @@
         <label>성명 *<input id="wName" autocomplete="off"></label>
         <label>휴대폰번호 *<input id="wPhone" inputmode="numeric" autocomplete="off" placeholder="01012345678 (- 없이)"></label>
         <label>연구개발기관명 *<input id="wOrg" autocomplete="off"></label>
+        <label>전문기관명 *<input id="wSpecOrg" autocomplete="off" list="specOrgList" placeholder="예: 정보통신기획평가원(IITP)"></label>
         <label>과제번호 (선택)<input id="wProject" autocomplete="off"></label>
+        <datalist id="specOrgList"></datalist>
       </div>
       <label class="row" style="font-size:14px;gap:8px;align-items:flex-start;flex-wrap:nowrap">
         <input type="checkbox" id="wAgree" style="width:auto;margin-top:3px">
@@ -736,6 +738,7 @@ function openConfirm(a, approved) {
       <dt>접수번호</dt><dd>${esc(a.receiptNo)}</dd>
       <dt>참석 회차</dt><dd>${esc(sessLabel(t))}</dd>
       ${a.walkin ? '<dt>구분</dt><dd>현장 신청</dd>' : approved ? `<dt>신청 회차</dt><dd>${esc(sessLabel(a.session))}</dd>` : ''}
+      ${a.specOrg ? `<dt>전문기관</dt><dd>${esc(a.specOrg)}</dd>` : ''}
       ${a.projectNo ? `<dt>과제번호</dt><dd>${esc(a.projectNo)}</dd>` : ''}
       ${a.phone ? `<dt>휴대폰번호</dt><dd>${esc(maskPhone(a.phone))}</dd>` : ''}
     </dl>`;
@@ -750,7 +753,9 @@ function openConfirm(a, approved) {
 function openWalkinForm() {
   if (!today()) return go('view-session');
   $('#walkinSess').textContent = `현재 회차 · ${sessLabel(today())}`;
-  ['#wName', '#wPhone', '#wOrg', '#wProject'].forEach(s => $(s).value = '');
+  ['#wName', '#wPhone', '#wOrg', '#wSpecOrg', '#wProject'].forEach(s => $(s).value = '');
+  const specs = [...new Set(state.applicants.map(a => a.specOrg).filter(Boolean))].sort();   // 명단에 있는 전문기관 목록 제안
+  $('#specOrgList').innerHTML = specs.map(v => `<option value="${esc(v)}">`).join('');
   $('#wAgree').checked = false;
   $('#walkinMsg').innerHTML = '';
   setTimeout(() => $('#wName').focus(), 50);
@@ -768,11 +773,12 @@ async function submitWalkin() {
   const t = today();
   if (!t) return go('view-session');
   const name = $('#wName').value.trim(), phone = $('#wPhone').value.trim();
-  const org = $('#wOrg').value.trim(), projectNo = $('#wProject').value.trim();
+  const org = $('#wOrg').value.trim(), projectNo = $('#wProject').value.trim(), specOrg = $('#wSpecOrg').value.trim();
   const err = m => { $('#walkinMsg').innerHTML = `<div class="msg err">${esc(m)}</div>`; };
   if (!name) return err('성명을 입력해 주세요.');
   if (normPhone(phone).length < 10) return err('휴대폰번호를 정확히 입력해 주세요.');
   if (!org) return err('연구개발기관명을 입력해 주세요.');
+  if (!specOrg) return err('전문기관명을 입력해 주세요.');
   if (!$('#wAgree').checked) return err('개인정보 수집·이용에 동의해 주세요.');
 
   const p = normPhone(phone);
@@ -788,7 +794,7 @@ async function submitWalkin() {
   if (dup) return openApplicant(dup);
 
   const a = {
-    receiptNo: nextWalkinNo(), name, org, projectNo, phone: normPhone(phone),   // 시트와 같은 형식(숫자만)
+    receiptNo: nextWalkinNo(), name, org, specOrg, projectNo, phone: normPhone(phone),   // 시트와 같은 형식(숫자만)
     status: 'CONFIRMED', session: t, walkin: true,
     createdAt: fmt(new Date()), desk: state.settings.desk || '',
   };
@@ -928,7 +934,7 @@ async function submitCheckin() {
   const rec = {
     id: key(t, a.receiptNo), session: t, appliedSession: a.walkin ? '' : a.session, approved: !!cur.approved,
     source: a.walkin ? 'walkin' : (cur.approved ? 'other' : ''),
-    receiptNo: a.receiptNo, name: a.name, org: a.org, projectNo: a.projectNo, phone: a.phone,
+    receiptNo: a.receiptNo, name: a.name, org: a.org, specOrg: a.specOrg || '', projectNo: a.projectNo, phone: a.phone,
     checkinAt: fmt(now), checkinISO: now.toISOString(),
     desk: state.settings.desk || '', sig: sigDataUrl(),
   };
@@ -1040,7 +1046,7 @@ function buildRoster(code) {
   const extra = attendFor(code).filter(r => !inBase.has(r.receiptNo))
     .sort((x, y) => x.checkinISO.localeCompare(y.checkinISO))
     .map(r => ({
-      a: { receiptNo: r.receiptNo, name: r.name, org: r.org, projectNo: r.projectNo, phone: r.phone, session: r.appliedSession },
+      a: { receiptNo: r.receiptNo, name: r.name, org: r.org, specOrg: r.specOrg, projectNo: r.projectNo, phone: r.phone, session: r.appliedSession },
       rec: r, walkin: true, source: r.source,
     }));
   return base.concat(extra).map(r => ({ ...r, sess: code }));
@@ -1083,8 +1089,8 @@ function exportCsv() {
   const all = buildRoster(code);
   if (!all.length) return alert('이 회차의 명단이 없습니다.');
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
-  const head = ['No', '참석 회차', '접수번호', '신청 회차', '성명', '연구개발기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
-  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), r.a.receiptNo, r.source === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.projectNo,
+  const head = ['No', '참석 회차', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
+  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), r.a.receiptNo, r.source === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.specOrg || '', r.a.projectNo,
     normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' (관리자 승인)' : '', r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
@@ -1194,7 +1200,7 @@ function mapApplicants(rows) {
   const col = keys => { for (const k of keys) { const i = H.findIndex(h => h.includes(k)); if (i >= 0) return i; } return -1; };
   const ix = {
     receiptNo: col(['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
-    projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), phone: col(['휴대폰', '핸드폰', '연락처', '전화']),
+    projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), specOrg: col(['전문기관']), phone: col(['휴대폰', '핸드폰', '연락처', '전화']),
     status: col(['상태', 'status']),
   };
   if (ix.name < 0) throw new Error('"성명" 열을 찾을 수 없습니다.');
@@ -1202,7 +1208,7 @@ function mapApplicants(rows) {
   return rows.slice(hi + 1).map(r => {
     const g = k => ix[k] >= 0 ? String(r[ix[k]] ?? '').trim() : '';
     const a = { receiptNo: g('receiptNo'), name: g('name'), sessionText: g('sessionText'),
-                projectNo: g('projectNo'), org: g('org'), phone: g('phone'), status: g('status') };
+                projectNo: g('projectNo'), org: g('org'), specOrg: g('specOrg'), phone: g('phone'), status: g('status') };
     a.session = detectSession(a.receiptNo, a.sessionText);
     return a;
   }).filter(a => a.receiptNo);
@@ -1317,6 +1323,7 @@ $('#btnBack').addEventListener('click', () => { state.current = null; go('view-l
 $('#btnClear').addEventListener('click', sizeSig);
 $('#btnSubmit').addEventListener('click', submitCheckin);
 $('#btnWalkin').addEventListener('click', submitWalkin);
+$('#view-walkin').addEventListener('input', () => { $('#walkinMsg').innerHTML = ''; });
 $('#btnSyncSave').addEventListener('click', saveSync);
 $('#btnSyncOff').addEventListener('click', disconnectSync);
 $('#btnSyncQr').addEventListener('click', showSyncQr);

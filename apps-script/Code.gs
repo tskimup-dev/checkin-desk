@@ -132,7 +132,7 @@ function readApplicants() {
     const col = keys => { for (const k of keys) { const i = H.findIndex(h => h.indexOf(k) >= 0); if (i >= 0) return i; } return -1; };
     const ix = {
       receiptNo: col(['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
-      projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']),
+      projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), specOrg: col(['전문기관']),
       phone: col(['휴대폰', '핸드폰', '연락처', '전화']), status: col(['상태', 'status']),
     };
     if (ix.receiptNo < 0 || ix.name < 0 || ix.status < 0) continue;
@@ -144,7 +144,7 @@ function readApplicants() {
     };
     return values.slice(1).map((r, i) => ({
       receiptNo: g(r, 'receiptNo'), name: g(r, 'name'), sessionText: g(r, 'sessionText'),
-      projectNo: g(r, 'projectNo'), org: g(r, 'org'), phone: phoneOf(i + 1), status: g(r, 'status'),
+      projectNo: g(r, 'projectNo'), org: g(r, 'org'), specOrg: g(r, 'specOrg'), phone: phoneOf(i + 1), status: g(r, 'status'),
     })).filter(a => a.receiptNo);
   }
   return [];
