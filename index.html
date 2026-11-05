@@ -1516,13 +1516,16 @@ async function connectSync(url, key) {
   url = String(url || '').trim(); key = String(key || '').trim();
   if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) throw new Error('Apps Script 웹 앱 주소(https://script.google.com/...)를 입력하세요.');
   if (!key) throw new Error('비밀키를 입력하세요.');
-  const r = await api({ action: 'pull', since: Date.now(), full: 1 }, 'GET', { url, key });
+  const r = await api({ action: 'pull', since: 0, full: 1 }, 'GET', { url, key });
   if (!r.ok) throw new Error(r.error || '연결 실패');
+  const sheetHasSettings = !!r.settings;
   const hadLocal = !state.settings.syncUrl && (state.attend.size || state.walkins.length);
   if (hadLocal && !confirm('이 기기에 있던 참석 기록은 시트 기록으로 대체됩니다. 계속할까요?\n(필요하면 먼저 참석자 명단을 저장하세요)')) return null;
   state.settings.syncUrl = url; state.settings.syncKey = key;
   state.lastSync = 0; state.lastFull = 0;
   await saveSettingsDb();
+  // 시트에 아직 설정이 없으면(첫 연결) 이 기기에서 입력해 둔 설정을 시트로 올림
+  if (!sheetHasSettings) { state.outbox.push({ action: 'settings', data: sharedSettings() }); await DB.set('outbox', state.outbox).catch(() => {}); }
   await syncTick(true);
   return r.applicants ? r.applicants.length : 0;
 }
