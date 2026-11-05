@@ -678,8 +678,7 @@ function handleQuery(raw) {
 
   if (!matches.length) {
     beep(false);
-    return lookupMsg(`<b>${esc(q)}</b> — 참석 확인이 가능한 신청 내역이 없습니다. 번호를 다시 확인해 주세요.
-      <div class="btns"><button type="button" class="small yellow" data-go="view-walkin">현장 신청하기</button></div>`);
+    return lookupMsg(`<b>${esc(q)}</b> — 참석 확인이 가능한 신청 내역이 없습니다. 번호를 다시 확인해 주세요.`);
   }
   if (matches.length === 1) return openApplicant(matches[0]);
 
