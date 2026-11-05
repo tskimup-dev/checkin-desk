@@ -494,10 +494,27 @@ const DB = {
 };
 
 /* ===================== 상태 ===================== */
+// 기본값: 저장된 값이 없거나 비어 있으면 이 값을 씁니다 (설정 화면에서 바꾸면 그 값이 우선)
 const DEFAULT_SETTINGS = {
-  eventName: '2026 연구개발사업 설명회', issuer: '', desk: '데스크1',
-  session: '', sessionInfo: {}, stamp: '', adminPin: ''
+  eventName: '2026년 태성회계법인 정산 설명회', issuer: '태성회계법인 정산 설명회 접수데스크', desk: '데스크 관리자',
+  session: '', stamp: '', adminPin: '',
+  sessionInfo: {
+    S001: { date: '2026.12.01(화) 10:00', place: 'KTX 대전역 우암홀' },
+    S002: { date: '2026.12.01(화) 14:00', place: 'KTX 대전역 우암홀' },
+    S003: { date: '2026.12.03(목) 10:00', place: 'KTX 부산역 회의실 201호' },
+    S004: { date: '2026.12.03(목) 14:00', place: 'KTX 부산역 회의실 201호' },
+  },
 };
+function applyDefaults(st) {
+  ['eventName', 'issuer', 'desk'].forEach(k => { if (!st[k]) st[k] = DEFAULT_SETTINGS[k]; });
+  const info = st.sessionInfo || {};
+  Object.keys(DEFAULT_SETTINGS.sessionInfo).forEach(c => {
+    const d = DEFAULT_SETTINGS.sessionInfo[c], cur = info[c] || {};
+    info[c] = { date: cur.date || d.date, place: cur.place || d.place };
+  });
+  st.sessionInfo = info;
+  return st;
+}
 const state = {
   applicants: [],
   attend: new Map(),      // id = 회차|접수번호
@@ -1506,6 +1523,7 @@ async function pull(fromZero, withApplicants) {
   }
   if (r.settings) {
     SHARED_KEYS.forEach(k => { if (r.settings[k] !== undefined) state.settings[k] = r.settings[k]; });
+    applyDefaults(state.settings);
     await saveSettingsDb();
   }
   if (r.applicants) {
@@ -1651,8 +1669,7 @@ window.addEventListener('resize', () => {
   try { await DB.open(); }
   catch (e) { alert('이 브라우저에서는 데이터를 저장할 수 없습니다. 크롬(Chrome)으로 열어 주세요.'); }
   const saved = await DB.get('settings').catch(() => null);
-  state.settings = { ...DEFAULT_SETTINGS, ...(saved || {}) };
-  if (!state.settings.sessionInfo) state.settings.sessionInfo = {};
+  state.settings = applyDefaults({ ...DEFAULT_SETTINGS, sessionInfo: {}, ...(saved || {}) });
   state.applicants = (await DB.get('applicants').catch(() => null)) || [];
   state.applicants.forEach(a => { if (a.session === undefined || !SESSIONS.some(s => s.code === a.session)) a.session = detectSession(a.receiptNo, a.sessionText || a.session); });
   ((await DB.all('attend').catch(() => [])) || []).forEach(r => state.attend.set(r.id, r));
