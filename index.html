@@ -187,11 +187,11 @@
     <div id="hdrEvent">설명회 접수데스크</div>
     <div id="hdrSub"></div>
   </div>
-  <button type="button" id="sessPill" data-go="view-session"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><b id="sessPillName">회차 선택</b><small>변경</small></button>
+  <button type="button" id="sessPill" data-go="view-session" data-admin="회차를 변경합니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><b id="sessPillName">회차 선택</b><small>변경</small></button>
   <div class="stats">참석 <b id="cntIn">0</b> / 대상 <b id="cntAll">0</b></div>
   <nav>
     <button type="button" data-go="view-lookup"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>접수</span></button>
-    <button type="button" data-go="view-list"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>참석자 명단</span></button>
+    <button type="button" data-go="view-list" data-admin="참석자 명단을 엽니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>참석자 명단</span></button>
     <button type="button" data-go="view-approve" data-admin="승인 관리 화면을 엽니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg><span>승인 관리</span><span class="badge" id="apBadge" data-n="0"></span></button>
     <button type="button" data-go="view-setup" data-admin="설정 화면을 엽니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg><span>설정</span></button>
   </nav>
@@ -1380,7 +1380,7 @@ document.addEventListener('click', async e => {
   if (!t) return;
   const d = t.dataset;
   if (d.go) {
-    if (d.admin && !await askPin(d.admin)) return;
+    if (d.admin && state.view !== d.go && !await askPin(d.admin, true)) return;   // 접수 외 메뉴는 누를 때마다 비밀번호
     return go(d.go);
   }
   if (d.apkind) { state.apKind = d.apkind; return renderApprovals(); }
