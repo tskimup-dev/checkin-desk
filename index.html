@@ -51,7 +51,10 @@
   .badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--err);color:#fff;font-size:12px;line-height:20px;text-align:center;margin-left:4px}
   .badge:empty,.badge[data-n="0"]{display:none}
 
-  main{max-width:900px;margin:24px auto;padding:0 16px}
+  main{max-width:1440px;margin:24px auto;padding:0 24px}
+  /* 입력·서명 화면은 가운데 적당한 폭으로, 명단·승인 화면은 넓게 */
+  #view-session .card,#view-lookup .card,#view-confirm .card,#view-cert .card,#view-walkin .card{max-width:900px;margin-left:auto;margin-right:auto}
+  #view-setup{max-width:1100px;margin:0 auto}
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;margin-bottom:16px}
   h1{font-size:26px;margin:0 0 6px}
   h2{font-size:18px;margin:0 0 8px}
@@ -105,7 +108,10 @@
   .tabs button.active{background:var(--primary);border-color:var(--primary);color:#fff}
   .table-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:10px}
   table{width:100%;border-collapse:collapse;font-size:14px}
-  th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:middle}
+  th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;word-break:keep-all}
+  th,td.nw{white-space:nowrap}
+  td.rno{word-break:break-all;min-width:150px;font-size:13px}
+  td.org{min-width:140px}
   th{background:#f7f8fa;position:sticky;top:0;z-index:1}
   td.sig{width:130px;height:46px;padding:2px 6px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
   td.sig img{height:40px;display:block}
@@ -852,9 +858,9 @@ function renderApprovals() {
     const action = x.status !== 'approved' ? ''
       : attended ? '<span class="pill ok">참석 완료</span>'
       : `<button type="button" class="small primary" data-sign="${esc(x.receiptNo)}">서명 진행</button>`;
-    return `<tr><td>${esc(x.name)}</td><td>${esc(x.org)}</td><td>${esc(x.receiptNo)}</td><td>${x.walkin ? '현장 신청' : esc(sessLabel(x.appliedSession))}</td>
+    return `<tr><td class="nw">${esc(x.name)}</td><td class="org">${esc(x.org)}</td><td class="rno">${esc(x.receiptNo)}</td><td>${x.walkin ? '현장 신청' : esc(sessLabel(x.appliedSession))}</td>
       <td>${x.status === 'approved' ? '<span class="pill ok">승인</span>' : '<span class="pill err">거절</span>'}</td>
-      <td>${esc(x.decidedAt)}</td><td>${action}</td></tr>`;
+      <td class="nw">${esc(x.decidedAt)}</td><td class="nw">${action}</td></tr>`;
   }).join('') : '<tr><td colspan="7" class="empty">처리 내역이 없습니다.</td></tr>';
 }
 
@@ -1118,10 +1124,10 @@ function renderList() {
                          <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
     else if (code === today()) action = `<button type="button" class="small" data-open="${esc(r.a.receiptNo)}">접수 처리</button>`;
     return `<tr class="${r.rec ? '' : 'absent'}">
-      <td>${r.no}</td><td><b>${esc(r.a.name)}</b></td><td>${esc(r.a.org)}</td><td>${esc(r.a.receiptNo)}</td>
-      <td>${r.rec ? `<span class="pill ok">참석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미참석</span>'}</td>
+      <td class="nw">${r.no}</td><td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="rno">${esc(r.a.receiptNo)}</td>
+      <td class="nw">${r.rec ? `<span class="pill ok">참석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미참석</span>'}</td>
       <td class="sig">${r.rec ? `<img src="${r.rec.sig}" alt="서명">` : ''}</td>
-      <td>${note}</td><td>${action}</td></tr>`;
+      <td>${note}</td><td class="nw">${action}</td></tr>`;
   }).join('') : `<tr><td colspan="8" class="empty">${all.length ? '조건에 맞는 사람이 없습니다.' : '이 회차의 CONFIRMED 신청자가 없습니다.'}</td></tr>`;
 }
 
