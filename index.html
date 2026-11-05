@@ -129,6 +129,10 @@
   #stampPreview{width:64px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
   textarea{margin-top:10px;font-size:13px;font-family:ui-monospace,Consolas,monospace}
 
+  .sync{font-size:13px;font-weight:600;padding:5px 10px;border-radius:999px;white-space:nowrap}
+  .sync.ok{background:var(--ok-bg);color:var(--ok)}
+  .sync.off{background:var(--warn-bg);color:var(--warn)}
+  #syncQr img,#syncQr canvas{margin:12px auto 0}
   .modal{position:fixed;inset:0;background:rgba(15,23,35,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
   .modal-card{background:#fff;border-radius:14px;padding:24px;width:100%;max-width:380px}
   .modal-card input{font-size:22px;letter-spacing:.3em;text-align:center;margin-top:10px}
@@ -165,6 +169,7 @@
   </div>
   <button type="button" id="sessPill" data-go="view-session">📍 <b id="sessPillName">회차 선택</b> · 변경</button>
   <div class="stats">참석 <b id="cntIn">0</b> / 대상 <b id="cntAll">0</b></div>
+  <span id="syncStatus" class="sync hidden"></span>
   <nav>
     <button type="button" data-go="view-lookup">접수</button>
     <button type="button" data-go="view-list">참석자 명단</button>
@@ -307,6 +312,22 @@
   <!-- 6. 설정 -->
   <section id="view-setup" class="view hidden">
     <div class="card">
+      <h2>구글 시트 연동 (여러 기기 공유)</h2>
+      <p class="muted" style="margin:0">연동하면 명단은 시트에서 자동으로 받아오고, 설정과 참석 기록은 모든 기기가 구글 시트로 함께 씁니다.</p>
+      <div class="grid" style="margin-top:12px">
+        <label>연동 주소 (Apps Script 웹 앱 URL)<input id="sSyncUrl" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec"></label>
+        <label>비밀키<input id="sSyncKey" type="password" autocomplete="off"></label>
+      </div>
+      <div class="actions">
+        <button type="button" class="danger" id="btnSyncOff">연동 해제</button>
+        <button type="button" id="btnSyncQr">다른 기기 연결 QR</button>
+        <button type="button" class="primary" id="btnSyncSave">연결 테스트 후 저장</button>
+      </div>
+      <div id="syncMsg"></div>
+      <div id="syncQr" class="center"></div>
+    </div>
+
+    <div class="card" id="importCard">
       <h2>1. 신청자 명단 불러오기</h2>
       <p class="muted" style="margin:0">
         구글 시트에서 <b>파일 → 다운로드 → CSV</b>로 받은 파일을 선택하거나, 시트에서 <b>머리글 포함</b> 범위를 복사해 아래에 붙여넣으세요.<br>
@@ -428,6 +449,8 @@ const state = {
   attend: new Map(),      // id = 회차|접수번호
   approvals: new Map(),   // id = 회차|접수번호
   walkins: [],            // 현장 신청자
+  outbox: [],             // 시트로 아직 못 보낸 작업
+  lastSync: 0, lastFull: 0, syncState: '', syncErr: '', syncBusy: false,
   settings: { ...DEFAULT_SETTINGS },
   current: null,          // { a, approved }
   view: '',
@@ -450,17 +473,21 @@ const sessName = code => (SESSIONS.find(s => s.code === code) || {}).name || '';
 const sessLabel = code => code ? `${sessName(code) || code} (${code})` : '회차 미확인';
 const sessionInfo = code => (state.settings.sessionInfo || {})[code] || {};
 
+// 회차 판별 순서: ① 회차ID 열(S001~S004) ② 회차 열의 글자("대전 1차") ③ 접수번호 안의 S코드
 function detectSession(receiptNo, text) {
-  const m = String(receiptNo || '').toUpperCase().match(/S\d{3}/);
-  if (m && SESSIONS.some(s => s.code === m[0])) return m[0];
+  const valid = c => SESSIONS.some(s => s.code === c);
   const t = String(text || '').replace(/\s/g, '');
-  const m2 = t.toUpperCase().match(/S\d{3}/);
-  if (m2 && SESSIONS.some(s => s.code === m2[0])) return m2[0];
-  for (const s of SESSIONS) {                       // "1차 대전", "대전1차" 등 글자로 된 회차
-    const [city, num] = s.name.split(' ');
-    if (t.includes(city) && t.includes(num)) return s.code;
+  const m = t.toUpperCase().match(/S\d{3}/);
+  if (m && valid(m[0])) return m[0];
+  if (t) {
+    for (const s of SESSIONS) {
+      const [city, num] = s.name.split(' ');
+      if (t.includes(city) && t.includes(num)) return s.code;
+    }
+    return '';                                       // 회차 열에 값이 있는데 모르는 회차(S_TEST 등)
   }
-  return '';
+  const m2 = String(receiptNo || '').toUpperCase().match(/S\d{3}/);
+  return m2 && valid(m2[0]) ? m2[0] : '';
 }
 
 function normPhone(p) {
@@ -539,7 +566,7 @@ function askPin(reason, force = false) {
       if (setMode) {
         if (!/^\d{4,}$/.test(v)) return err('숫자 4자리 이상으로 입력하세요.');
         if (v !== $('#pinInput2').value.trim()) return err('두 번 입력한 비밀번호가 다릅니다.');
-        state.settings.adminPin = v; await saveSettingsDb();
+        state.settings.adminPin = v; await saveSettingsDb(); pushSettings();
         return close(true);
       }
       if (v === state.settings.adminPin) return close(true);
@@ -563,7 +590,7 @@ function go(id) {
   if (id === 'view-walkin') openWalkinForm();
   if (id === 'view-list') { if (!state.listSession) state.listSession = today() || SESSIONS[0].code; renderList(); }
   if (id === 'view-approve') renderApprovals();
-  if (id === 'view-setup') { fillSettingsForm(); showImportInfo(); }
+  if (id === 'view-setup') { fillSettingsForm(); showImportInfo(); fillSyncForm(); }
   window.scrollTo(0, 0);
 }
 
@@ -752,6 +779,7 @@ async function submitWalkin() {
   };
   state.walkins.push(a);
   await DB.set('walkins', state.walkins).catch(() => alert('현장 신청 저장에 실패했습니다.'));
+  queue({ action: 'walkin', rec: a });
   openApplicant(a);
   lookupMsg(`<b>${esc(a.name)}</b>님의 현장 신청이 접수되었습니다. (접수번호 ${esc(a.receiptNo)})<br>
     참석 확인을 하려면 <b>관리자 승인</b>이 필요합니다.
@@ -777,6 +805,7 @@ async function requestApproval(no) {
   const x = newApproval(a);
   state.approvals.set(x.id, x);
   await DB.put('approvals', x).catch(() => {});
+  queue({ action: 'approval', rec: x });
   refreshHeader();
   lookupMsg(`<b>${esc(a.name)}</b>님의 승인 요청을 등록했습니다.<br>관리자가 [승인 관리]에서 승인하면 그 화면의 [서명 진행] 또는 다시 조회로 접수할 수 있습니다.`, 'ok');
 }
@@ -786,6 +815,7 @@ async function setDecision(id, status) {
   if (!x) return;
   x.status = status; x.decidedAt = fmt(new Date());
   await DB.put('approvals', x).catch(() => {});
+  queue({ action: 'approval', rec: x });
   refreshHeader();
 }
 
@@ -887,6 +917,29 @@ async function submitCheckin() {
     checkinAt: fmt(now), checkinISO: now.toISOString(),
     desk: state.settings.desk || '', sig: sigDataUrl(),
   };
+  if (syncOn()) {                                   // 시트에 먼저 기록 (다른 데스크와 중복 방지)
+    btn.textContent = '저장 중…';
+    try {
+      const r = await api({ action: 'checkin', rec });
+      if (r.exists && r.exists.checkinISO !== rec.checkinISO) {
+        state.attend.set(r.exists.id, r.exists);
+        await DB.put('attend', r.exists).catch(() => {});
+        btn.disabled = false; btn.textContent = '참석 확인';
+        refreshHeader();
+        $('#confirmMsg').innerHTML = `<div class="msg warn"><b>${esc(a.name)}</b>님은 ${esc(r.exists.desk)}에서 이미 참석 처리되었습니다. (${esc(r.exists.checkinAt)})</div>`;
+        return;
+      }
+      if (!r.ok) throw new Error(r.error || '저장 실패');
+      state.syncState = 'ok';
+    } catch (e) {
+      if (e.fatal) alert(e.message);
+      state.outbox.push({ action: 'checkin', rec });   // 연결이 안 되면 기기에 두었다가 나중에 전송
+      await DB.set('outbox', state.outbox).catch(() => {});
+      state.syncState = 'off';
+    }
+    btn.textContent = '참석 확인';
+    updateSyncUi();
+  }
   try { await DB.put('attend', rec); }
   catch (e) { alert('브라우저 저장에 실패했습니다. 화면을 닫기 전에 [참석자 명단]에서 CSV/참석자 명단을 꼭 저장하세요.'); }
   state.attend.set(rec.id, rec);
@@ -1113,10 +1166,21 @@ async function deleteAttend(id) {
   if (!await askPin(`${r.name}님의 참석 기록을 삭제하려면 관리자 비밀번호를 입력하세요.`, true)) return;
   await DB.remove('attend', id).catch(() => {});
   state.attend.delete(id);
+  queue({ action: 'deleteAttend', id });
   refreshHeader(); renderList();
 }
 
 async function resetAll() {
+  if (syncOn()) {
+    if (!confirm('이 기기에 저장된 데이터만 지우고 구글 시트에서 다시 받아옵니다.\n(구글 시트의 기록은 그대로 유지됩니다)')) return;
+    if (!await askPin('초기화를 하려면 관리자 비밀번호를 입력하세요.', true)) return;
+    if (state.outbox.length && !confirm(`아직 시트로 보내지 못한 기록 ${state.outbox.length}건이 있습니다. 함께 지울까요?`)) return;
+    for (const st of ['attend', 'approvals']) await DB.clear(st).catch(() => {});
+    state.attend.clear(); state.approvals.clear(); state.walkins = []; state.outbox = []; state.lastSync = 0;
+    await DB.del('walkins').catch(() => {}); await DB.set('outbox', []).catch(() => {});
+    await syncTick(true);
+    return alert('이 기기의 데이터를 초기화하고 시트에서 다시 받아왔습니다.');
+  }
   if (!state.attend.size && !state.approvals.size && !state.walkins.length) return alert('삭제할 기록이 없습니다.');
   if (!confirm('모든 회차의 참석 기록(서명 포함), 승인 기록, 현장 신청 기록을 삭제합니다.\n먼저 회차별 참석자 명단을 저장하셨나요?')) return;
   if (!await askPin('전체 초기화를 하려면 관리자 비밀번호를 입력하세요.', true)) return;
@@ -1152,10 +1216,10 @@ function mapApplicants(rows) {
   const hi = rows.findIndex((r, i) => i < 10 && r.some(c => c.replace(/\s/g, '').includes('접수번호')));
   if (hi < 0) throw new Error('"접수번호" 열이 있는 머리글 행을 찾을 수 없습니다.');
   const H = rows[hi].map(c => c.replace(/\s/g, '').toLowerCase());
-  const col = keys => H.findIndex(h => keys.some(k => h.includes(k)));
+  const col = keys => { for (const k of keys) { const i = H.findIndex(h => h.includes(k)); if (i >= 0) return i; } return -1; };
   const ix = {
-    receiptNo: col(['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차']),
-    projectNo: col(['과제번호']), org: col(['기관']), phone: col(['휴대폰', '핸드폰', '연락처', '전화']),
+    receiptNo: col(['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
+    projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), phone: col(['휴대폰', '핸드폰', '연락처', '전화']),
     status: col(['상태', 'status']),
   };
   if (ix.name < 0) throw new Error('"성명" 열을 찾을 수 없습니다.');
@@ -1250,6 +1314,7 @@ async function saveSettings() {
   });
   if (pin) state.settings.adminPin = pin;
   await saveSettingsDb();
+  pushSettings();
   refreshHeader();
   $('#sPinNew').value = '';
   $('#settingsMsg').innerHTML = `<div class="msg ok">저장되었습니다.${pin ? ' 관리자 비밀번호가 변경되었습니다.' : ''}</div>`;
@@ -1259,14 +1324,14 @@ async function saveSettings() {
 async function loadStamp(file) {
   const url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
   const img = await loadImg(url);
-  const k = Math.min(1, 240 / Math.max(img.width, img.height));      // 가볍게 축소
+  const k = Math.min(1, 160 / Math.max(img.width, img.height));      // 가볍게 축소 (시트 저장 한도 대비)
   const c = document.createElement('canvas');
   c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
   state.settings.stamp = c.toDataURL('image/png');
   $('#stampPreview').src = state.settings.stamp;
   $('#stampPreview').classList.remove('hidden');
-  await saveSettingsDb();
+  await saveSettingsDb(); pushSettings();
 }
 
 /* ===================== 이벤트 연결 ===================== */
@@ -1277,6 +1342,9 @@ $('#btnBack').addEventListener('click', () => { state.current = null; go('view-l
 $('#btnClear').addEventListener('click', sizeSig);
 $('#btnSubmit').addEventListener('click', submitCheckin);
 $('#btnWalkin').addEventListener('click', submitWalkin);
+$('#btnSyncSave').addEventListener('click', saveSync);
+$('#btnSyncOff').addEventListener('click', disconnectSync);
+$('#btnSyncQr').addEventListener('click', showSyncQr);
 $('#btnNext').addEventListener('click', () => { $('#q').value = ''; lookupMsg(''); go('view-lookup'); });
 $('#listSession').addEventListener('change', e => { state.listSession = e.target.value; renderList(); });
 $('#listSearch').addEventListener('input', renderList);
@@ -1291,7 +1359,7 @@ $('#stampFile').addEventListener('change', e => { const f = e.target.files[0]; i
 $('#btnStampDel').addEventListener('click', async () => {
   state.settings.stamp = ''; $('#stampFile').value = '';
   $('#stampPreview').classList.add('hidden');
-  await saveSettingsDb();
+  await saveSettingsDb(); pushSettings();
 });
 $('#btnLock').addEventListener('click', () => {
   state.adminUntil = 0; refreshAdminUi();
@@ -1321,6 +1389,194 @@ document.addEventListener('click', async e => {
   if (d.sign) { const a = findApplicant(d.sign); if (a) openApplicant(a); return; }
 });
 
+/* ===================== 구글 시트 연동 ===================== */
+const SHARED_KEYS = ['eventName', 'issuer', 'sessionInfo', 'stamp', 'adminPin'];  // 기기 간 공유되는 설정
+const syncOn = () => !!(state.settings.syncUrl && state.settings.syncKey);
+
+async function api(payload, method = 'POST', cfg) {
+  const url = (cfg && cfg.url) || state.settings.syncUrl;
+  const k = (cfg && cfg.key) || state.settings.syncKey;
+  const ctrl = new AbortController();
+  const tm = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = method === 'GET'
+      ? await fetch(url + '?' + new URLSearchParams({ ...payload, key: k }), { signal: ctrl.signal })
+      : await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                           body: JSON.stringify({ ...payload, key: k }), signal: ctrl.signal });
+    const j = await res.json();
+    if (j.error === 'key') { const e = new Error('구글 시트 연동 비밀키가 맞지 않습니다.'); e.fatal = true; throw e; }
+    return j;
+  } finally { clearTimeout(tm); }
+}
+
+function sharedSettings() { const o = { id: 'settings' }; SHARED_KEYS.forEach(k => o[k] = state.settings[k]); return o; }
+function pushSettings() { if (syncOn()) queue({ action: 'settings', data: sharedSettings() }); }
+
+async function queue(op) {
+  if (!syncOn()) return;
+  state.outbox.push(op);
+  await DB.set('outbox', state.outbox).catch(() => {});
+  updateSyncUi();
+  setTimeout(() => syncTick(), 200);
+}
+
+async function flush(conflicts) {
+  while (state.outbox.length) {
+    const op = state.outbox[0];
+    const r = await api(op);
+    if (op.action === 'checkin' && r.exists && r.exists.checkinISO !== op.rec.checkinISO) {
+      state.attend.set(r.exists.id, r.exists);          // 다른 데스크가 먼저 처리 → 시트 기록으로 맞춤
+      await DB.put('attend', r.exists).catch(() => {});
+      conflicts.push(r.exists);
+    } else if (!r.ok) throw new Error(r.error || '시트 저장 실패');
+    state.outbox.shift();
+    await DB.set('outbox', state.outbox).catch(() => {});
+  }
+}
+
+async function pull(fromZero, withApplicants) {
+  const r = await api({ action: 'pull', since: fromZero ? 0 : state.lastSync, full: withApplicants ? 1 : 0 }, 'GET');
+  if (!r.ok) throw new Error(r.error || '시트 불러오기 실패');
+  if (fromZero) {                                       // 처음/초기화 후: 시트 기준으로 다시 구성
+    state.attend.clear(); state.approvals.clear();
+    await DB.clear('attend').catch(() => {}); await DB.clear('approvals').catch(() => {});
+    state.walkins = [];
+  }
+  for (const [list, map, store] of [[r.attend, state.attend, 'attend'], [r.approvals, state.approvals, 'approvals']]) {
+    for (const x of list || []) {
+      if (x.deleted) { map.delete(x.id); await DB.remove(store, x.id).catch(() => {}); }
+      else { map.set(x.id, x); await DB.put(store, x).catch(() => {}); }
+    }
+  }
+  if ((r.walkins || []).length || fromZero) {
+    const m = new Map(state.walkins.map(w => [w.receiptNo, w]));
+    (r.walkins || []).forEach(w => m.set(w.receiptNo, w));
+    state.walkins = [...m.values()];
+    await DB.set('walkins', state.walkins).catch(() => {});
+  }
+  if (r.settings) {
+    SHARED_KEYS.forEach(k => { if (r.settings[k] !== undefined) state.settings[k] = r.settings[k]; });
+    await saveSettingsDb();
+  }
+  if (r.applicants) {
+    state.applicants = r.applicants.map(a => ({ ...a, session: detectSession(a.receiptNo, a.sessionText) }));
+    await DB.set('applicants', state.applicants).catch(() => {});
+  }
+  state.lastSync = Math.max(0, r.now - 10000);          // 시계 오차 대비 10초 겹치게
+  await DB.set('lastSync', state.lastSync).catch(() => {});
+}
+
+async function syncTick(force = false) {
+  if (!syncOn() || state.syncBusy) return;
+  state.syncBusy = true;
+  const conflicts = [];
+  try {
+    await flush(conflicts);
+    const withApplicants = force || !state.lastFull || Date.now() - state.lastFull > 120000;
+    await pull(force || !state.lastSync, withApplicants);
+    if (withApplicants) state.lastFull = Date.now();
+    state.syncState = 'ok'; state.syncErr = '';
+  } catch (e) {
+    state.syncState = 'off'; state.syncErr = e.message || String(e);
+    if (e.fatal) alert(e.message);
+  } finally {
+    state.syncBusy = false;
+    updateSyncUi();
+    refreshHeader();
+    if (state.view === 'view-list') renderList();
+    if (state.view === 'view-approve') renderApprovals();
+    if (state.view === 'view-session') renderSessionPicker();
+    if (conflicts.length) alert(`다른 데스크에서 먼저 참석 처리된 ${conflicts.length}건이 있어 시트 기록으로 맞췄습니다.\n` +
+      conflicts.map(c => `· ${c.name} (${c.desk}, ${c.checkinAt})`).join('\n'));
+  }
+}
+
+function updateSyncUi() {
+  const el = $('#syncStatus');
+  if (!syncOn()) return el.classList.add('hidden');
+  const n = state.outbox.length;
+  el.classList.remove('hidden');
+  el.className = 'sync ' + (state.syncState === 'off' ? 'off' : 'ok');
+  el.textContent = state.syncState === 'off' ? `● 오프라인${n ? ` · 미전송 ${n}` : ''}` : `● 시트 연동${n ? ` · 전송 대기 ${n}` : ''}`;
+  el.title = state.syncErr || '';
+}
+setInterval(() => syncTick(), 20000);
+window.addEventListener('online', () => syncTick());
+
+function fillSyncForm() {
+  $('#sSyncUrl').value = state.settings.syncUrl || '';
+  $('#sSyncKey').value = state.settings.syncKey || '';
+  $('#importCard').classList.toggle('hidden', syncOn());
+  $('#syncQr').innerHTML = '';
+  $('#syncMsg').innerHTML = syncOn()
+    ? `<div class="msg ok">연동 중입니다. 명단 ${state.applicants.length}명 · 마지막 동기화 ${state.lastSync ? fmt(new Date(state.lastSync + 10000)) : '-'}${state.outbox.length ? ` · 전송 대기 ${state.outbox.length}건` : ''}</div>` : '';
+}
+
+async function connectSync(url, key) {
+  url = String(url || '').trim(); key = String(key || '').trim();
+  if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) throw new Error('Apps Script 웹 앱 주소(https://script.google.com/...)를 입력하세요.');
+  if (!key) throw new Error('비밀키를 입력하세요.');
+  const r = await api({ action: 'pull', since: Date.now(), full: 1 }, 'GET', { url, key });
+  if (!r.ok) throw new Error(r.error || '연결 실패');
+  const hadLocal = !state.settings.syncUrl && (state.attend.size || state.walkins.length);
+  if (hadLocal && !confirm('이 기기에 있던 참석 기록은 시트 기록으로 대체됩니다. 계속할까요?\n(필요하면 먼저 참석자 명단을 저장하세요)')) return null;
+  state.settings.syncUrl = url; state.settings.syncKey = key;
+  state.lastSync = 0; state.lastFull = 0;
+  await saveSettingsDb();
+  await syncTick(true);
+  return r.applicants ? r.applicants.length : 0;
+}
+
+async function saveSync() {
+  $('#syncMsg').innerHTML = '<div class="msg warn">연결 확인 중…</div>';
+  try {
+    const n = await connectSync($('#sSyncUrl').value, $('#sSyncKey').value);
+    if (n === null) return fillSyncForm();
+    fillSyncForm(); showImportInfo();
+    $('#syncMsg').innerHTML = `<div class="msg ok">연동되었습니다. 시트에서 명단 ${n}명을 받아왔습니다.</div>`;
+  } catch (e) {
+    $('#syncMsg').innerHTML = `<div class="msg err">연결하지 못했습니다: ${esc(e.name === 'AbortError' ? '응답 시간 초과' : e.message)}</div>`;
+  }
+}
+
+async function disconnectSync() {
+  if (!syncOn()) return;
+  if (state.outbox.length && !confirm(`아직 시트로 보내지 못한 기록 ${state.outbox.length}건이 있습니다. 그래도 연동을 해제할까요?`)) return;
+  if (!confirm('구글 시트 연동을 해제할까요? 이 기기에 받아둔 기록은 남아 있습니다.')) return;
+  state.settings.syncUrl = ''; state.settings.syncKey = '';
+  await saveSettingsDb();
+  updateSyncUi(); fillSyncForm();
+}
+
+async function showSyncQr() {
+  if (!syncOn()) return $('#syncMsg').innerHTML = '<div class="msg err">먼저 연동을 저장하세요.</div>';
+  const link = location.origin + location.pathname + '#connect=' + encodeURIComponent(JSON.stringify({ u: state.settings.syncUrl, k: state.settings.syncKey }));
+  const box = $('#syncQr');
+  box.innerHTML = `<p class="muted" style="margin:12px 0 0">다른 기기의 카메라로 찍으면 바로 연동됩니다. <b>비밀키가 들어 있으니</b> 관리자만 사용하세요.</p><div id="qrBox"></div>
+    <button type="button" class="small" id="btnCopyLink" style="margin-top:10px">연결 링크 복사</button>`;
+  $('#btnCopyLink').onclick = async () => {
+    try { await navigator.clipboard.writeText(link); $('#btnCopyLink').textContent = '복사됨'; }
+    catch (e) { prompt('아래 링크를 복사하세요', link); }
+  };
+  try {
+    if (!window.QRCode) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+    new QRCode($('#qrBox'), { text: link, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L });
+  } catch (e) { $('#qrBox').innerHTML = '<p class="muted">QR을 만들지 못했습니다(인터넷 필요). 링크 복사를 이용하세요.</p>'; }
+}
+
+async function handleConnectLink() {
+  if (!location.hash.startsWith('#connect=')) return false;
+  let cfg = null;
+  try { cfg = JSON.parse(decodeURIComponent(location.hash.slice(9))); } catch (e) {}
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!cfg || !confirm('이 기기를 구글 시트와 연동할까요?')) return false;
+  try {
+    const n = await connectSync(cfg.u, cfg.k);
+    if (n !== null) alert(`연동되었습니다. 명단 ${n}명을 받아왔습니다.`);
+    return true;
+  } catch (e) { alert('연동하지 못했습니다: ' + e.message); return false; }
+}
+
 /* ===================== 모바일 · 오프라인 ===================== */
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1345,6 +1601,11 @@ window.addEventListener('resize', () => {
   ((await DB.all('attend').catch(() => [])) || []).forEach(r => state.attend.set(r.id, r));
   ((await DB.all('approvals').catch(() => [])) || []).forEach(r => state.approvals.set(r.id, r));
   state.walkins = (await DB.get('walkins').catch(() => null)) || [];
+  state.outbox = (await DB.get('outbox').catch(() => null)) || [];
+  state.lastSync = (await DB.get('lastSync').catch(() => null)) || 0;
+  updateSyncUi();
+  await handleConnectLink();
+  if (syncOn()) await syncTick(!state.applicants.length);
   refreshHeader(); refreshAdminUi();
   if (!state.applicants.length) go('view-setup');
   else if (!today()) go('view-session');

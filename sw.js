@@ -1,6 +1,6 @@
 // 오프라인 동작용 서비스 워커
 // index.html을 고친 뒤 다시 올릴 때는 아래 VERSION 숫자를 올려 주세요.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = 'checkin-desk-' + VERSION;
 const JSQR = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];

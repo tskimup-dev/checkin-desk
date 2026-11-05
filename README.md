@@ -7,3 +7,7 @@
 - index.html : 접수데스크 화면
 - sw.js : 오프라인 동작용 (index.html 수정 후 올릴 때 VERSION 숫자를 올려 주세요)
 - manifest.webmanifest, *.png : 홈 화면 앱 아이콘
+
+## 구글 시트 연동 (선택)
+여러 기기가 명단·설정·참석 기록을 함께 쓰려면 `apps-script/Code.gs`를 별도 Apps Script 프로젝트로 배포하고,
+접수데스크 [설정 → 구글 시트 연동]에 웹 앱 주소와 비밀키를 입력하세요. 실제 비밀키는 이 저장소에 올리지 마세요.
