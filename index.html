@@ -163,6 +163,11 @@
   .sync.ok{background:var(--ok-bg);color:var(--ok)}
   .sync.off{background:var(--warn-bg);color:var(--warn)}
   #syncQr img,#syncQr canvas{margin:12px auto 0}
+  #gate{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px}
+  #gate .modal-card{max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+  #gate input{font-size:20px;text-align:center;margin-top:10px;letter-spacing:.08em}
+  #gate p{word-break:keep-all}
+  #gateSkip{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:6px 0;margin-top:6px}
   .modal{position:fixed;inset:0;background:rgba(15,23,35,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
   .modal-card{background:#fff;border-radius:14px;padding:24px;width:100%;max-width:380px}
   .modal-card input{font-size:22px;letter-spacing:.3em;text-align:center;margin-top:10px}
@@ -434,6 +439,20 @@
 </main>
 
 <!-- 관리자 비밀번호 창 -->
+<!-- 접속 잠금: 페이지를 새로 열 때마다 처음 한 번 -->
+<div id="gate" class="hidden">
+  <div class="modal-card center">
+    <img src="icon-192.png" alt="" width="56" height="56" style="border-radius:12px">
+    <h2 id="gateTitle" style="margin-top:10px">관리자 비밀번호</h2>
+    <p id="gateDesc" class="muted" style="margin:0"></p>
+    <input type="password" id="gateIn" autocomplete="off">
+    <input type="password" id="gateIn2" inputmode="numeric" autocomplete="off" placeholder="한 번 더 입력" class="hidden">
+    <div id="gateMsg"></div>
+    <button type="button" class="primary big" id="gateOk" style="width:100%;margin-top:14px">확인</button>
+    <button type="button" id="gateSkip" class="hidden">연동 없이 이 기기에서만 사용하기</button>
+  </div>
+</div>
+
 <div id="pinModal" class="modal hidden">
   <div class="modal-card">
     <h2 id="pinTitle">관리자 확인</h2>
@@ -622,7 +641,7 @@ const saveSettingsDb = () => DB.set('settings', state.settings).catch(() => {});
 
 /* ===================== 관리자 비밀번호 ===================== */
 const isUnlocked = () => Date.now() < state.adminUntil;
-function refreshAdminUi() { $('#btnLock').classList.toggle('hidden', !isUnlocked()); }
+function refreshAdminUi() { $('#btnLock').classList.remove('hidden'); }   // 잠금 버튼은 항상 표시
 setInterval(refreshAdminUi, 10000);
 
 // force=true면 잠금 해제 상태와 관계없이 항상 비밀번호를 다시 묻습니다 (삭제·초기화용)
@@ -1431,9 +1450,10 @@ $('#btnStampDel').addEventListener('click', async () => {
   $('#stampPreview').classList.add('hidden');
   await saveSettingsDb(); pushSettings();
 });
-$('#btnLock').addEventListener('click', () => {
-  state.adminUntil = 0; refreshAdminUi();
-  if (['view-approve', 'view-setup'].includes(state.view)) go('view-lookup');
+$('#btnLock').addEventListener('click', async () => {   // 화면 전체 잠금 → 다시 비밀번호
+  state.adminUntil = 0; setGateOk(false);
+  go('view-lookup');
+  await showGate();
 });
 
 document.addEventListener('click', async e => {
@@ -1664,6 +1684,74 @@ async function handleConnectLink() {
   } catch (e) { alert('연동하지 못했습니다: ' + e.message); return false; }
 }
 
+/* ===================== 접속 잠금 ===================== */
+// 페이지를 새로 열 때(새 탭·앱 다시 실행·QR로 연결) 처음 한 번 관리자 비밀번호를 받습니다.
+const GATE_KEY = 'deskUnlocked';
+const gateOk = () => { try { return sessionStorage.getItem(GATE_KEY) === '1'; } catch (e) { return false; } };
+const setGateOk = v => { try { v ? sessionStorage.setItem(GATE_KEY, '1') : sessionStorage.removeItem(GATE_KEY); } catch (e) {} };
+let gateFails = 0, gateWaitUntil = 0;
+
+function showGate() {
+  return new Promise(resolve => {
+    const el = $('#gate');
+    // pin: 비밀번호 입력 / set: 새 비밀번호 정하기 / key: 처음 쓰는 기기 → 연동 비밀키로 시트 연결
+    let m = state.settings.adminPin ? 'pin' : (!syncOn() && state.settings.syncUrl ? 'key' : 'set');
+    const render = () => {
+      $('#gateTitle').textContent = { pin: '관리자 비밀번호', set: '관리자 비밀번호 설정', key: '처음 사용하는 기기입니다' }[m];
+      $('#gateDesc').innerHTML = {
+        pin: '접수데스크를 사용하려면 관리자 비밀번호를 입력하세요.',
+        set: '사용할 관리자 비밀번호(숫자 4자리 이상)를 정해 주세요.',
+        key: '구글 시트 연동 비밀키를 입력하면 명단과 설정을 받아옵니다.<br>그다음 관리자 비밀번호로 접속합니다.',
+      }[m];
+      const inp = $('#gateIn');
+      inp.value = ''; inp.inputMode = m === 'key' ? 'text' : 'numeric';
+      inp.placeholder = m === 'key' ? '연동 비밀키' : '비밀번호';
+      $('#gateIn2').value = ''; $('#gateIn2').classList.toggle('hidden', m !== 'set');
+      $('#gateSkip').classList.toggle('hidden', m !== 'key');
+      $('#gateMsg').innerHTML = '';
+      setTimeout(() => inp.focus(), 30);
+    };
+    const err = t => { $('#gateMsg').innerHTML = `<div class="msg err">${esc(t)}</div>`; };
+    const done = () => {
+      setGateOk(true);
+      el.classList.add('hidden');
+      $('#gateOk').onclick = $('#gateSkip').onclick = $('#gateIn').onkeydown = $('#gateIn2').onkeydown = null;
+      resolve();
+    };
+    const ok = async () => {
+      const v = $('#gateIn').value.trim();
+      if (m === 'pin') {
+        if (Date.now() < gateWaitUntil) return err(`잠시 후 다시 시도하세요. (${Math.ceil((gateWaitUntil - Date.now()) / 1000)}초)`);
+        if (v === state.settings.adminPin) { gateFails = 0; return done(); }
+        $('#gateIn').value = '';
+        if (++gateFails >= 5) { gateFails = 0; gateWaitUntil = Date.now() + 30000; return err('5회 틀려서 30초 동안 입력할 수 없습니다.'); }
+        return err('비밀번호가 맞지 않습니다.');
+      }
+      if (m === 'set') {
+        if (!/^\d{4,}$/.test(v)) return err('숫자 4자리 이상으로 입력하세요.');
+        if (v !== $('#gateIn2').value.trim()) return err('두 번 입력한 비밀번호가 다릅니다.');
+        state.settings.adminPin = v; await saveSettingsDb(); pushSettings();
+        return done();
+      }
+      if (!v) return err('연동 비밀키를 입력하세요.');
+      $('#gateMsg').innerHTML = '<div class="msg warn">연결 확인 중…</div>';
+      try {
+        const n = await connectSync(state.settings.syncUrl, v);
+        if (n === null) return render();
+        m = state.settings.adminPin ? 'pin' : 'set';
+        render();
+        $('#gateMsg').innerHTML = `<div class="msg ok">연동되었습니다. 명단 ${n}명을 받아왔습니다.</div>`;
+      } catch (e) { err('연결하지 못했습니다: ' + (e.name === 'AbortError' ? '응답 시간 초과' : e.message)); }
+    };
+    const onKey = e => { if (e.key === 'Enter') ok(); };
+    $('#gateOk').onclick = ok;
+    $('#gateIn').onkeydown = onKey; $('#gateIn2').onkeydown = onKey;
+    $('#gateSkip').onclick = () => { m = 'set'; render(); };
+    el.classList.remove('hidden');
+    render();
+  });
+}
+
 /* ===================== 모바일 · 오프라인 ===================== */
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1692,7 +1780,10 @@ window.addEventListener('resize', () => {
   state.lastResetAt = (await DB.get('lastResetAt').catch(() => null)) || 0;
   updateSyncUi();
   await handleConnectLink();
-  if (syncOn()) await syncTick(!state.applicants.length);
+  const syncP = syncOn() ? syncTick(!state.applicants.length) : Promise.resolve();
+  if (!state.settings.adminPin) await syncP;        // 비밀번호를 시트에서 받아와야 하는 경우
+  if (!gateOk()) await showGate();                  // 페이지를 새로 열면 처음 한 번 비밀번호
+  await syncP;
   refreshHeader(); refreshAdminUi();
   if (!state.applicants.length) go('view-setup');
   else if (!today()) go('view-session');
