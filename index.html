@@ -249,7 +249,7 @@
       <p class="muted" style="margin:0 0 14px">사전 신청 내역이 없는 분은 아래 정보를 입력해 주세요. 관리자 승인 후 참석 확인이 진행됩니다.<br>좌석은 사전 신청자에게 우선 배정되며, 현장 신청자분께는 잔여석에 한해 순차적으로 안내해 드립니다. 너른 양해 부탁드립니다.</p>
       <div class="grid">
         <label>성명 *<input id="wName" autocomplete="off"></label>
-        <label>휴대폰번호 *<input id="wPhone" inputmode="numeric" autocomplete="off" placeholder="01012345678 (- 없이)"></label>
+        <label>휴대폰번호 *<input id="wPhone" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="01012345678 (- 없이)"></label>
         <label>연구개발기관명 *<input id="wOrg" autocomplete="off"></label>
         <label>전문기관명 *<select id="wSpecOrg">
           <option value="">전문기관을 선택해 주세요</option>
@@ -1428,6 +1428,20 @@ async function loadStamp(file) {
   $('#stampPreview').classList.remove('hidden');
   await saveSettingsDb(); pushSettings();
 }
+
+/* ===================== 휴대폰번호 11자리 제한 ===================== */
+// 현장 신청: 숫자만, 최대 11자리 / 조회 칸: 숫자로만 입력할 때(휴대폰번호)만 11자리 제한, 접수번호(영문 포함)는 그대로
+$('#wPhone').addEventListener('input', e => {
+  const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+  if (v !== e.target.value) e.target.value = v;
+});
+$('#q').addEventListener('input', e => {
+  const v = e.target.value;
+  if (/^[\d\s-]*$/.test(v)) {
+    const d = v.replace(/\D/g, '').slice(0, 11);
+    if (d !== v) e.target.value = d;
+  }
+});
 
 /* ===================== 이벤트 연결 ===================== */
 $('#lookupForm').addEventListener('submit', e => { e.preventDefault(); handleQuery($('#q').value); });
