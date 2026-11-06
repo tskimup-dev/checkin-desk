@@ -58,7 +58,8 @@
   .badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--err);color:#fff;font-size:12px;line-height:20px;text-align:center;margin-left:2px}
   @media (max-width:760px){
     header.top{gap:8px;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top))}
-    .side-brand{flex:1;max-width:none}
+    .side-brand{flex:1 1 100%;max-width:none}      /* 휴대폰: 1줄 행사명, 2줄 회차·인원·잠금, 3줄 메뉴 */
+    .stats{flex:1}
     #hdrSub{display:none}
     .stats{font-size:12px}
     .stats b{font-size:14px}
@@ -198,7 +199,7 @@
     <div id="hdrSub"></div>
   </div>
   <button type="button" id="sessPill" data-go="view-session" data-admin="회차를 변경합니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><b id="sessPillName">회차 선택</b><small>변경</small></button>
-  <div class="stats">참석 <b id="cntIn">0</b> / 대상 <b id="cntAll">0</b></div>
+  <div class="stats">참석 <b id="cntIn">0</b> · 미참석 <b id="cntOut">0</b> · 총원 <b id="cntAll">0</b></div>
   <nav>
     <button type="button" data-go="view-lookup"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>접수</span></button>
     <button type="button" data-go="view-list" data-admin="참석자 명단을 엽니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>참석자 명단</span></button>
@@ -614,6 +615,12 @@ const isAllowed = a => statusOf(a) === 'CONFIRMED';            // CONFIRMED만 �
 const rosterBase = code => state.applicants.filter(a => isAllowed(a) && a.session === code);
 const attendFor = code => [...state.attend.values()].filter(r => r.session === code);
 const allApplicants = () => state.applicants.concat(state.walkins);
+// 회차별 인원: 총원 = CONFIRMED 사전 신청자 + 승인받아 참석한 타 회차·현장 신청자
+function counts(code) {
+  if (!code) return { in: 0, out: 0, all: 0 };
+  const r = buildRoster(code), n = r.filter(x => x.rec).length;
+  return { in: n, out: r.length - n, all: r.length };
+}
 const findApplicant = no => allApplicants().find(a => a.receiptNo === no);
 // 참석자 명단 행의 구분: 현장 신청 / 타 회차 승인 (r.walkin은 '명단 밖 추가 행'이라는 뜻이라 구분에 쓰지 않음)
 const isWalkinRow = r => r.source === 'walkin' || (r.rec && r.rec.source === 'walkin') || String((r.a && r.a.receiptNo) || r.receiptNo || '').startsWith('현장-');
@@ -704,8 +711,8 @@ function refreshHeader() {
   $('#hdrSub').textContent = s.desk || '';
   $('#sessPillName').textContent = t ? sessName(t) : '회차 선택';
   $('#lookupSess').textContent = t ? `현재 회차 · ${sessLabel(t)}` : '회차가 선택되지 않았습니다';
-  $('#cntIn').textContent = t ? attendFor(t).length : 0;
-  $('#cntAll').textContent = t ? rosterBase(t).length : 0;
+  const c = counts(t);
+  $('#cntIn').textContent = c.in; $('#cntOut').textContent = c.out; $('#cntAll').textContent = c.all;
   const pending = [...state.approvals.values()].filter(x => x.status === 'pending').length;
   $('#apBadge').textContent = pending || ''; $('#apBadge').dataset.n = pending;
   document.title = `${t ? sessName(t) + ' - ' : ''}${s.eventName || '접수데스크'}`;
@@ -719,7 +726,7 @@ function renderSessionPicker() {
       <span class="sess-name">${esc(s.name)}</span>
       <span class="sess-code">${s.code}${s.code === today() ? ' · 현재 회차' : ''}</span>
       <span class="sess-meta">${esc(info.date || '일시 미입력')}<br>${esc(info.place || '')}</span>
-      <span class="sess-count">참석 ${attendFor(s.code).length} / 대상 ${rosterBase(s.code).length}</span>
+      <span class="sess-count">${(c => `참석 ${c.in} · 미참석 ${c.out} · 총원 ${c.all}`)(counts(s.code))}</span>
     </button>`;
   }).join('');
 }
@@ -1180,7 +1187,7 @@ function renderList() {
     let action = '';
     if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
                          <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
-    else if (r.sess === today()) action = `<button type="button" class="small" data-open="${esc(r.a.receiptNo)}">접수 처리</button>`;
+    else if (r.sess === today()) action = `<button type="button" class="small" data-open-admin="${esc(r.a.receiptNo)}">접수 처리</button>`;
     return `<tr class="${r.rec ? '' : 'absent'}">
       <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="pno">${esc(r.a.projectNo)}</td><td class="org">${esc(r.a.specOrg || '')}</td><td class="rno">${esc(r.a.receiptNo)}</td>
       <td class="nw">${r.rec ? `<span class="pill ok">참석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미참석</span>'}</td>
@@ -1457,12 +1464,17 @@ $('#btnLock').addEventListener('click', async () => {   // 화면 전체 잠금 
 });
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-go],[data-apkind],[data-filter],[data-open],[data-cert],[data-del],[data-pick-session],[data-req],[data-decide],[data-sign]');
+  const t = e.target.closest('[data-go],[data-open-admin],[data-apkind],[data-filter],[data-open],[data-cert],[data-del],[data-pick-session],[data-req],[data-decide],[data-sign]');
   if (!t) return;
   const d = t.dataset;
   if (d.go) {
     if (d.admin && state.view !== d.go && !await askPin(d.admin, true)) return;   // 접수 외 메뉴는 누를 때마다 비밀번호
     return go(d.go);
+  }
+  if (d.openAdmin) {                                 // 참석자 명단의 '접수 처리'는 매번 비밀번호
+    const a = findApplicant(d.openAdmin);
+    if (a && await askPin(`${a.name}님을 접수 처리합니다.`, true)) openApplicant(a);
+    return;
   }
   if (d.apkind) { state.apKind = d.apkind; return renderApprovals(); }
   if (d.filter) { state.listFilter = d.filter; return renderList(); }
