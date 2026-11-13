@@ -112,10 +112,8 @@ async function draw(d, ex) {
     if (d.i) {
       g.font = `bold 36px ${FONT}`;
       const tw = Math.min(g.measureText(d.i).width, W - 240);
-      let stamped = false;
-      if (ex.stamp) { try { g.drawImage(await loadImg(ex.stamp), W / 2 + tw / 2 - 18, 1135, 82, 82); stamped = true; } catch (e) {} }
       g.fillStyle = '#111'; g.fillText(d.i, W / 2, 1195, W - 240);
-      if (!stamped) { g.textAlign = 'left'; g.font = `22px ${FONT}`; g.fillStyle = '#555'; g.fillText('(직인생략)', W / 2 + tw / 2 + 14, 1193); }
+      g.textAlign = 'left'; g.font = `22px ${FONT}`; g.fillStyle = '#aaa'; g.fillText('(직인생략)', W / 2 + tw / 2 + 14, 1193);
     }
   } else {
     g.fillText('위 사람은 위 설명회에 참석하였음을 확인합니다.', W / 2, 930, W - 160);
@@ -124,7 +122,7 @@ async function draw(d, ex) {
       g.font = `bold 36px ${FONT}`;
       const tw = Math.min(g.measureText(d.i).width, W - 300);
       g.fillText(d.i, W / 2, 1150, W - 300);
-      g.textAlign = 'left'; g.font = `22px ${FONT}`; g.fillStyle = '#555';
+      g.textAlign = 'left'; g.font = `22px ${FONT}`; g.fillStyle = '#aaa';
       g.fillText('(직인생략)', W / 2 + tw / 2 + 14, 1148);
     }
   }
