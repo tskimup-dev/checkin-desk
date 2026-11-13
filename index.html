@@ -250,6 +250,7 @@
       <div class="grid">
         <label>성명 *<input id="wName" autocomplete="off"></label>
         <label>휴대폰번호 *<input id="wPhone" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="01012345678 (- 없이)"></label>
+        <label>이메일 (선택)<input id="wEmail" type="email" inputmode="email" autocomplete="off" placeholder="참석 확인증을 이메일로 받으려면 입력"></label>
         <label>연구개발기관명 *<input id="wOrg" autocomplete="off"></label>
         <label>전문기관명 *<select id="wSpecOrg">
           <option value="">전문기관을 선택해 주세요</option>
@@ -310,9 +311,15 @@
           <div style="font-weight:700;font-size:17px">휴대폰으로 참석 확인증 받기</div>
           <p class="muted" style="margin:4px 0 10px;font-size:14px">휴대폰 카메라로 QR을 찍으면<br>참석 확인증을 저장할 수 있습니다.</p>
           <div id="certQr"></div>
+          <div id="certMail" class="cert-mail hidden">
+            <div style="font-weight:700;font-size:16px;margin-top:16px">이메일로 받기</div>
+            <p class="muted" style="margin:4px 0 8px;font-size:14px"><span id="certMailTo"></span></p>
+            <button type="button" class="primary" id="btnMail" style="width:100%">이메일로 참석 확인증 받기</button>
+            <div id="certMailMsg"></div>
+          </div>
         </div>
       </div>
-      <button class="primary big" id="btnNext" type="button">다음 참석자 접수하기</button>
+      <button class="primary big" id="btnNext" type="button" style="margin-top:20px">다음 참석자 접수하기</button>
     </div>
   </section>
 
@@ -877,7 +884,7 @@ function openConfirm(a, approved) {
 function openWalkinForm() {
   if (!today()) return go('view-session');
   $('#walkinSess').textContent = `현재 회차 · ${sessLabel(today())}`;
-  ['#wName', '#wPhone', '#wOrg', '#wSpecOrg', '#wProject'].forEach(s => $(s).value = '');
+  ['#wName', '#wPhone', '#wEmail', '#wOrg', '#wSpecOrg', '#wProject'].forEach(s => $(s).value = '');
   $('#wAgree').checked = false;
   $('#walkinMsg').innerHTML = '';
   setTimeout(() => $('#wName').focus(), 50);
@@ -896,9 +903,11 @@ async function submitWalkin() {
   if (!t) return go('view-session');
   const name = $('#wName').value.trim(), phone = $('#wPhone').value.trim();
   const org = $('#wOrg').value.trim(), projectNo = $('#wProject').value.trim(), specOrg = $('#wSpecOrg').value.trim();
+  const email = $('#wEmail').value.trim();
   const err = m => { $('#walkinMsg').innerHTML = `<div class="msg err">${esc(m)}</div>`; };
   if (!name) return err('성명을 입력해 주세요.');
   if (normPhone(phone).length < 10) return err('휴대폰번호를 정확히 입력해 주세요.');
+  if (email && !isEmail(email)) return err('이메일 주소 형식을 확인해 주세요.');
   if (!org) return err('연구개발기관명을 입력해 주세요.');
   if (!specOrg) return err('전문기관을 선택해 주세요.');
   if (!$('#wAgree').checked) return err('개인정보 수집·이용에 동의해 주세요.');
@@ -916,7 +925,7 @@ async function submitWalkin() {
   if (dup) return openApplicant(dup);
 
   const a = {
-    receiptNo: nextWalkinNo(), name, org, specOrg, projectNo, phone: normPhone(phone),   // 시트와 같은 형식(숫자만)
+    receiptNo: nextWalkinNo(), name, org, specOrg, projectNo, phone: normPhone(phone), email,   // 휴대폰은 시트와 같은 형식(숫자만)
     status: 'CONFIRMED', session: t, walkin: true,
     createdAt: fmt(new Date()), desk: state.settings.desk || '',
   };
@@ -1065,7 +1074,7 @@ async function submitCheckin() {
     id: key(t, a.receiptNo), session: t, appliedSession: a.walkin ? '' : a.session, approved: !!cur.approved,
     source: a.walkin ? 'walkin' : a.waitlist ? 'waitlist' : (cur.approved ? 'other' : ''),
     seq: a.seq || '',
-    receiptNo: a.receiptNo, name: a.name, org: a.org, specOrg: a.specOrg || '', projectNo: a.projectNo, phone: a.phone,
+    receiptNo: a.receiptNo, name: a.name, org: a.org, specOrg: a.specOrg || '', projectNo: a.projectNo, phone: a.phone, email: a.email || '',
     checkinAt: fmt(now), checkinISO: now.toISOString(),
     desk: state.settings.desk || '', sig: sigDataUrl(),
   };
@@ -1158,6 +1167,69 @@ async function showCert(rec) {
   img.removeAttribute('src');
   img.src = await drawCertificate(rec);
   renderCertQr(rec);
+  renderCertMail(rec);
+}
+
+/* ===================== 참석 확인증 이메일 ===================== */
+const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
+function maskEmail(v) {
+  const [id, dom] = String(v).split('@');
+  return (id.length <= 3 ? id.slice(0, 1) + '**' : id.slice(0, 3) + '*'.repeat(Math.min(5, id.length - 3))) + '@' + dom;
+}
+function certEmailOf(rec) {
+  const a = findApplicant(rec.receiptNo);
+  return (rec.email || (a && a.email) || '').trim();
+}
+function renderCertMail(rec) {
+  const box = $('#certMail'), to = certEmailOf(rec);
+  state.mailRec = rec;
+  $('#certMailMsg').innerHTML = '';
+  if (!syncOn()) return box.classList.add('hidden');           // 메일은 구글 시트 연동(Apps Script)으로 보냄
+  box.classList.remove('hidden');
+  const btn = $('#btnMail');
+  if (!isEmail(to)) {
+    $('#certMailTo').textContent = '등록된 이메일 주소가 없습니다. QR로 받아 주세요.';
+    btn.classList.add('hidden');
+    return;
+  }
+  $('#certMailTo').textContent = `신청 시 입력한 ${maskEmail(to)} 로 보내드립니다.`;
+  btn.classList.remove('hidden');
+  btn.disabled = false;
+  btn.textContent = rec.mailedAt ? '다시 보내기' : '이메일로 참석 확인증 받기';
+  if (rec.mailedAt) $('#certMailMsg').innerHTML = `<div class="msg ok">${esc(rec.mailedAt)}에 보냈습니다.</div>`;
+}
+async function sendCertMail() {
+  const rec = state.mailRec;
+  if (!rec) return;
+  const to = certEmailOf(rec), btn = $('#btnMail');
+  const s = state.settings, info = sessionInfo(rec.session);
+  const op = {
+    action: 'sendCert', to, name: rec.name, receiptNo: rec.receiptNo,
+    eventName: s.eventName, sessionName: sessName(rec.session), date: info.date, place: info.place, sender: s.issuer,
+    img: $('#certImg').src, link: certLink(rec), ts: Date.now(),
+  };
+  btn.disabled = true; btn.textContent = '보내는 중…';
+  const msg = (t, c) => { $('#certMailMsg').innerHTML = `<div class="msg ${c}">${t}</div>`; };
+  try {
+    const r = await api(op);
+    if (r.ok) {
+      rec.mailedAt = fmt(new Date());
+      await DB.put('attend', rec).catch(() => {});
+      btn.textContent = '다시 보내기'; btn.disabled = false;
+      return msg('이메일을 보냈습니다. 받은편지함(또는 스팸함)을 확인해 주세요.', 'ok');
+    }
+    btn.disabled = false; btn.textContent = '이메일로 참석 확인증 받기';
+    if (r.error === 'quota') return msg('오늘 보낼 수 있는 메일 수를 모두 사용했습니다. QR로 받아 주세요.', 'err');
+    if (r.error === 'action') return msg('메일 기능이 아직 설정되지 않았습니다. 관리자에게 문의해 주세요. (Apps Script 업데이트 필요)', 'err');
+    return msg('보내지 못했습니다: ' + esc(r.error || ''), 'err');
+  } catch (e) {
+    if (e.fatal) { btn.disabled = false; return msg(esc(e.message), 'err'); }
+    state.outbox.push(op);                                     // 인터넷이 끊기면 연결될 때 보냄
+    await DB.set('outbox', state.outbox).catch(() => {});
+    updateSyncUi();
+    btn.textContent = '전송 대기 중';
+    return msg('인터넷 연결이 불안정해 연결되면 자동으로 보냅니다. QR로도 바로 받을 수 있어요.', 'warn');
+  }
 }
 
 // 신청자 휴대폰용 확인증 링크 (확인증 내용만 담음, 서명·직인 제외)
@@ -1356,7 +1428,7 @@ function mapApplicants(rows) {
   const isWait = H.some(h => h.includes('대기접수번호'));    // 신청 시트의 '대기자' 탭
   const ix = {
     receiptNo: col(isWait ? ['대기접수번호'] : ['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
-    projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), specOrg: col(['전문기관']), phone: col(['휴대폰', '핸드폰', '연락처', '전화']),
+    projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), specOrg: col(['전문기관']), phone: col(['휴대폰', '핸드폰', '연락처', '전화']), email: col(['이메일', 'email']),
     status: col(['상태', 'status']), seq: col(['발급순번', '대기순번', '순번']),
   };
   if (ix.name < 0) throw new Error('"성명" 열을 찾을 수 없습니다.');
@@ -1364,7 +1436,7 @@ function mapApplicants(rows) {
   return rows.slice(hi + 1).map(r => {
     const g = k => ix[k] >= 0 ? String(r[ix[k]] ?? '').trim() : '';
     const a = { receiptNo: g('receiptNo'), name: g('name'), sessionText: g('sessionText'),
-                projectNo: g('projectNo'), org: g('org'), specOrg: g('specOrg'), phone: g('phone'), status: g('status') };
+                projectNo: g('projectNo'), org: g('org'), specOrg: g('specOrg'), phone: g('phone'), email: g('email'), status: g('status') };
     a.session = detectSession(a.receiptNo, a.sessionText);
     if (isWait) { a.waitlist = true; a.seq = g('seq'); }
     return a;
@@ -1505,6 +1577,7 @@ $('#btnBack').addEventListener('click', () => { state.current = null; go('view-l
 $('#btnClear').addEventListener('click', sizeSig);
 $('#btnSubmit').addEventListener('click', submitCheckin);
 $('#btnWalkin').addEventListener('click', submitWalkin);
+$('#btnMail').addEventListener('click', sendCertMail);
 $('#view-walkin').addEventListener('input', () => { $('#walkinMsg').innerHTML = ''; });
 $('#btnSyncSave').addEventListener('click', saveSync);
 $('#btnSyncOff').addEventListener('click', disconnectSync);
@@ -1608,7 +1681,7 @@ async function flush(conflicts) {
       state.attend.set(r.exists.id, r.exists);          // 다른 데스크가 먼저 처리 → 시트 기록으로 맞춤
       await DB.put('attend', r.exists).catch(() => {});
       conflicts.push(r.exists);
-    } else if (!r.ok) throw new Error(r.error || '시트 저장 실패');
+    } else if (!r.ok && op.action !== 'sendCert') throw new Error(r.error || '시트 저장 실패');   // 메일 실패(한도 등)는 건너뜀
     state.outbox.shift();
     await DB.set('outbox', state.outbox).catch(() => {});
   }

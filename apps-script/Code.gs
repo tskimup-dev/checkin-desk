@@ -111,6 +111,8 @@ function doPost(e) {
         PropertiesService.getScriptProperties().setProperty('resetAt', String(now));
         return out({ ok: true, resetAt: now });
       }
+      case 'sendCert':
+        return out(sendCert_(b));
       default:
         return out({ ok: false, error: 'action' });
     }
@@ -119,6 +121,33 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ---------- 참석 확인증 이메일 ---------- */
+// 이 Apps Script를 배포한 구글 계정 이름으로 발송됩니다. 하루 한도: 개인 Gmail 약 100통, Workspace 약 1,500통
+function sendCert_(b) {
+  const to = String(b.to || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return { ok: false, error: '이메일 주소 형식이 올바르지 않습니다.' };
+  if (MailApp.getRemainingDailyQuota() < 1) return { ok: false, error: 'quota' };
+  const h = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const m = String(b.img || '').match(/^data:image\/(png|jpeg);base64,(.+)$/);
+  const attachments = m ? [Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1],
+    '참석확인증_' + String(b.name || '').replace(/[\\/:*?"<>|]/g, '') + (m[1] === 'png' ? '.png' : '.jpg'))] : [];
+  const when = [b.sessionName, b.date, b.place].filter(String).join(' · ');
+  MailApp.sendEmail({
+    to: to,
+    subject: '[' + (b.eventName || '설명회') + '] 참석 확인증',
+    name: b.sender || b.eventName || '설명회 접수데스크',
+    htmlBody:
+      '<div style="font-family:Malgun Gothic,Apple SD Gothic Neo,sans-serif;font-size:15px;line-height:1.7;color:#16202c">' +
+      '<p><b>' + h(b.name) + '</b>님, <b>' + h(b.eventName) + '</b>에 참석해 주셔서 감사합니다.</p>' +
+      (when ? '<p style="color:#555">' + h(when) + '</p>' : '') +
+      '<p>참석 확인증을 첨부해 드립니다.' + (b.link ? ' 아래 버튼으로도 확인하실 수 있습니다.' : '') + '</p>' +
+      (b.link ? '<p><a href="' + h(b.link) + '" style="display:inline-block;padding:10px 18px;background:#1f5fbf;color:#fff;border-radius:8px;text-decoration:none">참석 확인증 보기</a></p>' : '') +
+      '<p style="color:#888;font-size:12px">본 메일은 발신 전용입니다. 접수번호 ' + h(b.receiptNo) + '</p></div>',
+    attachments: attachments,
+  });
+  return { ok: true, left: MailApp.getRemainingDailyQuota() };
 }
 
 /* ---------- 신청자 명단 읽기 ---------- */
@@ -143,6 +172,7 @@ function readSignupTab_(wait) {
       receiptNo: col(wait ? ['대기접수번호'] : ['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
       projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), specOrg: col(['전문기관']),
       phone: col(['휴대폰', '핸드폰', '연락처', '전화']), status: col(['상태', 'status']), seq: col(['발급순번', '대기순번', '순번']),
+      email: col(['이메일', 'email']),
     };
     if (ix.receiptNo < 0 || ix.name < 0 || ix.status < 0) continue;
     const g = (r, k) => ix[k] >= 0 ? String(r[ix[k]] || '').trim() : '';
@@ -153,7 +183,7 @@ function readSignupTab_(wait) {
     };
     return values.slice(1).map((r, i) => {
       const a = { receiptNo: g(r, 'receiptNo'), name: g(r, 'name'), sessionText: g(r, 'sessionText'),
-        projectNo: g(r, 'projectNo'), org: g(r, 'org'), specOrg: g(r, 'specOrg'), phone: phoneOf(i + 1), status: g(r, 'status') };
+        projectNo: g(r, 'projectNo'), org: g(r, 'org'), specOrg: g(r, 'specOrg'), phone: phoneOf(i + 1), email: g(r, 'email'), status: g(r, 'status') };
       if (wait) a.seq = g(r, 'seq');
       return a;
     }).filter(a => a.receiptNo);
@@ -236,6 +266,7 @@ function out(o) {
 /* 설치 확인용: 편집기에서 실행하면 명단 인원과 탭 생성을 확인합니다 */
 function testSetup() {
   Object.keys(TABLES).forEach(sheetOf);
+  Logger.log('오늘 남은 메일 발송 가능 수: ' + MailApp.getRemainingDailyQuota() + '통');   // 메일 권한 승인용
   const list = readApplicants();
   Logger.log('명단 ' + list.length + '명, CONFIRMED ' + list.filter(a => a.status.toUpperCase() === 'CONFIRMED').length + '명');
   const w = readWaitlist();
