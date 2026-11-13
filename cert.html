@@ -20,6 +20,10 @@
   .survey h2{margin:0 0 6px;font-size:19px;color:var(--primary)}
   .survey p{margin:0 0 12px;font-size:14px;color:var(--text)}
   .survey .btn{margin-top:0;width:100%;padding:15px 22px;font-size:18px;box-shadow:0 3px 10px rgba(31,95,191,.3)}
+  .files{margin-top:12px;padding:16px;border:1.5px solid var(--line);border-radius:14px;background:#fff;text-align:center}
+  .files h2{margin:0 0 4px;font-size:17px}
+  .files p{margin:0 0 12px;font-size:14px;color:var(--muted)}
+  .files .btn{margin-top:0;width:100%;padding:13px 22px;background:#0f7b5f}
   .err{background:#fdecea;color:#b42318;border-radius:10px;padding:16px;text-align:left}
 </style>
 </head>
@@ -36,12 +40,20 @@
     <p>오늘 설명회는 어떠셨나요? 남겨 주신 의견은<br>다음 설명회 준비에 소중히 반영하겠습니다.</p>
     <a class="btn" id="surveyBtn" target="_blank" rel="noopener">만족도 조사 참여하기</a>
   </div>
+  <div class="files" id="files">
+    <h2>📂 설명회 자료</h2>
+    <p>오늘 설명회 발표 자료를 받아 보실 수 있습니다.</p>
+    <a class="btn" id="filesBtn" target="_blank" rel="noopener">설명회 자료 다운로드</a>
+  </div>
 </main>
 <script>
 /* QR 안에 확인증 내용이 들어 있고, 서명·직인은 기록 번호와 기록별 열쇠로 데스크 시트(Apps Script)에서 불러옵니다. */
 const SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdgElv5xupD6McmsHbCVGu5Qmn1u81wVzxgjryF2YlcQEeeRg/viewform';  // 비우면 안내 숨김
 if (SURVEY_URL) document.getElementById('surveyBtn').href = SURVEY_URL;
 else document.getElementById('survey').remove();
+const FILES_URL = 'https://drive.google.com/drive/folders/1jbDeXL99D1Wpq-FiAb47JFeNAcXg9MVR';  // 설명회 자료 (비우면 숨김)
+if (FILES_URL) document.getElementById('filesBtn').href = FILES_URL;
+else document.getElementById('files').remove();
 const FONT = '"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
 
 function decode(hash) {
