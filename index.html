@@ -110,6 +110,9 @@
   dl.kv dt{color:var(--muted)}
   dl.kv dd{margin:0;font-weight:600;word-break:break-all}
   .sig-label{margin:18px 0 8px;font-weight:600}
+  .email2{display:flex;align-items:center;gap:6px;margin-top:4px}
+  .email2 input{margin-top:0!important;min-width:0;flex:1}
+  .email2 b{color:var(--text);font-size:17px}
   .proxy{margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fafbfc}
   .sig-wrap{position:relative;border:2px dashed #b9c2cf;border-radius:12px;background:#fff}
   #sigPad{display:block;width:100%;aspect-ratio:2/1;touch-action:none;cursor:crosshair}
@@ -295,7 +298,10 @@
         <div id="pxBox" class="grid hidden" style="margin-top:10px">
           <label>대리인 성명 *<input id="pxName" autocomplete="off"></label>
           <label>대리인 휴대폰번호 *<input id="pxPhone" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="01012345678 (- 없이)"></label>
-          <label>대리인 이메일 (선택)<input id="pxEmail" type="email" inputmode="email" autocomplete="off" placeholder="@"></label>
+          <label>대리인 이메일 *
+            <span class="email2"><input id="pxEmailId" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false"><b>@</b><input id="pxEmailDom" list="mailDomains" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="naver.com"></span>
+          </label>
+          <datalist id="mailDomains"><option value="naver.com"><option value="gmail.com"><option value="daum.net"><option value="hanmail.net"><option value="kakao.com"><option value="nate.com"></datalist>
         </div>
       </div>
       <div class="sig-label" id="sigLabel">아래 칸에 서명해 주세요</div>
@@ -890,7 +896,7 @@ function openConfirm(a, approved) {
   $('#confirmMsg').innerHTML = '';
   $('#proxyWrap').classList.toggle('hidden', !!a.walkin);          // 현장 신청은 본인이 직접 작성하므로 대리 없음
   $('#pxOn').checked = false; setProxyUi();
-  ['#pxName', '#pxPhone', '#pxEmail'].forEach(x => $(x).value = '');
+  ['#pxName', '#pxPhone', '#pxEmailId', '#pxEmailDom'].forEach(x => $(x).value = '');
   go('view-confirm');
   requestAnimationFrame(sizeSig);
 }
@@ -1094,9 +1100,9 @@ async function submitCheckin() {
   const a = cur.a, t = today();
   let proxy = null;
   if ($('#pxOn').checked && !a.walkin) {
-    const pn = $('#pxName').value.trim(), pp = $('#pxPhone').value.trim(), pe = $('#pxEmail').value.trim();
+    const pn = $('#pxName').value.trim(), pp = $('#pxPhone').value.trim(), pe = ($('#pxEmailId').value.trim() + '@' + $('#pxEmailDom').value.trim()).replace(/\s/g, '');
     const bad = !pn ? '대리인 성명을 입력해 주세요.' : !/^0\d{9,10}$/.test(pp) ? '대리인 휴대폰번호를 숫자 10~11자리로 입력해 주세요.'
-      : pe && !isEmail(pe) ? '대리인 이메일 주소 형식을 확인해 주세요.' : '';
+      : !isEmail(pe) ? '대리인 이메일 주소를 입력해 주세요.' : '';
     if (bad) { $('#confirmMsg').innerHTML = `<div class="msg err">${bad}</div>`; return; }
     proxy = { proxyName: pn, proxyPhone: pp, proxyEmail: pe };
   }
@@ -1618,6 +1624,10 @@ async function loadStamp(file) {
 /* ===================== 휴대폰번호 11자리 제한 ===================== */
 // 현장 신청: 숫자만, 최대 11자리 / 조회 칸: 숫자로만 입력할 때(휴대폰번호)만 11자리 제한, 접수번호(영문 포함)는 그대로
 $('#pxOn').addEventListener('change', setProxyUi);
+$('#pxEmailId').addEventListener('input', e => {             // 아이디 칸에 @까지 붙여넣으면 나눠 넣기
+  const v = e.target.value;
+  if (v.includes('@')) { const [id, ...d] = v.split('@'); e.target.value = id; $('#pxEmailDom').value = d.join('').trim(); $('#pxEmailDom').focus(); }
+});
 $('#pxPhone').addEventListener('input', e => {
   const v = e.target.value.replace(/\D/g, '').slice(0, 11);
   if (v !== e.target.value) e.target.value = v;
