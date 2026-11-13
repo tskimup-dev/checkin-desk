@@ -150,7 +150,6 @@ function sendCert_(b) {
         '<p style="margin:0 0 14px">오늘 설명회는 어떠셨나요? 남겨 주신 의견은 다음 설명회를 더 알차게 준비하는 데 소중히 반영하겠습니다. ' +
         '잠시만 시간을 내어 참여해 주시면 큰 힘이 됩니다.</p>' +
         btn(SURVEY_URL, '만족도 조사 참여하기', '#1f5fbf') + '</div>' : '') +
-      (b.link ? '<p>첨부파일이 열리지 않으면 아래 버튼으로 확인증을 볼 수 있습니다.</p><p>' + btn(b.link, '참석 확인증 보기', '#5b6573') + '</p>' : '') +
       '<p style="color:#888;font-size:12px;margin-top:24px">문의: ' + h(MAIL_FROM) + '</p></div>';
   const subject = '[' + (b.eventName || '설명회') + '] 참석 확인증';
   const name = b.sender || b.eventName || '설명회 접수데스크';
