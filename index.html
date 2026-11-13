@@ -199,7 +199,7 @@
     <div id="hdrSub"></div>
   </div>
   <button type="button" id="sessPill" data-go="view-session" data-admin="회차를 변경합니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><b id="sessPillName">회차 선택</b><small>변경</small></button>
-  <div class="stats">참석 <b id="cntIn">0</b> <small id="cntBrk" class="muted"></small> · 미참석 <b id="cntOut">0</b> · 전체 <b id="cntAll">0</b></div>
+  <div class="stats">참석 <b id="cntIn">0</b> <small id="cntBrk" class="muted"></small> · 미참석 <b id="cntOut">0</b> · 전체 <b id="cntAll">0</b> <small id="cntAllBrk" class="muted"></small></div>
   <nav>
     <button type="button" data-go="view-lookup"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>접수</span></button>
     <button type="button" data-go="view-list" data-admin="참석자 명단을 엽니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>참석자 명단</span></button>
@@ -639,6 +639,8 @@ function counts(code) {
   if (!code) return z;
   const r = buildRoster(code), att = r.filter(x => x.rec);
   return { in: att.length, out: r.length - att.length, all: r.length,
+           tin: r.filter(x => catOf(x) === 'in').length, tover: r.filter(x => catOf(x) === 'over').length,
+           twalk: r.filter(x => catOf(x) === 'walkin').length,
            cin: att.filter(x => catOf(x) === 'in').length, cover: att.filter(x => catOf(x) === 'over').length,
            cwalk: att.filter(x => catOf(x) === 'walkin').length };
 }
@@ -737,6 +739,7 @@ function refreshHeader() {
   $('#lookupSess').textContent = t ? `현재 회차 · ${sessLabel(t)}` : '회차가 선택되지 않았습니다';
   const c = counts(t);
   $('#cntIn').textContent = c.in; $('#cntOut').textContent = c.out; $('#cntAll').textContent = c.all;
+  $('#cntAllBrk').textContent = t ? `(신청 ${c.tin || 0}명 · 대기 ${c.tover || 0}명${c.twalk ? ` · 현장 ${c.twalk}명` : ''})` : '';
   $('#cntBrk').textContent = c.in ? `(정원 내 ${c.cin} · 신청대기 ${c.cover} · 현장 ${c.cwalk})` : '';
   const pending = [...state.approvals.values()].filter(x => x.status === 'pending').length;
   $('#apBadge').textContent = pending || ''; $('#apBadge').dataset.n = pending;
