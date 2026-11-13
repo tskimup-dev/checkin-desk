@@ -633,7 +633,7 @@ function catOf(r) {
   if (src === 'waitlist' || /^WAIT_/i.test(no)) return 'over';
   return 'in';
 }
-// 회차별 인원: 전체 = 정원 내 신청자(CONFIRMED) + 참석한 정원 외·현장접수·타 회차 승인자
+// 회차별 인원: 전체 = 정원 내(CONFIRMED) + 정원 외(대기 WAITING) + 참석한 현장접수·타 회차 승인자
 function counts(code) {
   const z = { in: 0, out: 0, all: 0, cin: 0, cover: 0, cwalk: 0 };
   if (!code) return z;
@@ -1188,7 +1188,9 @@ function loadScript(src) {
 // 회차의 전체 명단(신청 순서) + 승인받아 참석한 타 회차 신청자
 function buildRoster(code) {
   if (code === 'ALL') return SESSIONS.flatMap(s => buildRoster(s.code));   // 전체 회차 통합
-  const base = rosterBase(code).map(a => ({ a, rec: state.attend.get(key(code, a.receiptNo)) || null, walkin: false }));
+  // 정원 내(CONFIRMED, 신청 순서) → 정원 외(대기 WAITING, 대기 순번 순) → 참석한 현장접수·타 회차 승인자
+  const waits = state.waitlist.filter(a => isAllowed(a) && a.session === code).sort((x, y) => (+x.seq || 0) - (+y.seq || 0));
+  const base = rosterBase(code).concat(waits).map(a => ({ a, rec: state.attend.get(key(code, a.receiptNo)) || null, walkin: false }));
   const inBase = new Set(base.map(r => r.a.receiptNo));
   const extra = attendFor(code).filter(r => !inBase.has(r.receiptNo))
     .sort((x, y) => x.checkinISO.localeCompare(y.checkinISO))
@@ -1219,7 +1221,7 @@ function renderList() {
 
   $('#listBody').innerHTML = rows.length ? rows.map(r => {
     const c = catOf(r);
-    const note = !r.walkin || c === 'walkin' ? '' : c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>`
+    const note = c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>` : !r.walkin || c === 'walkin' ? ''
       : `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>`;
     let action = '';
     if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
@@ -1240,7 +1242,7 @@ function exportCsv() {
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
   const head = ['No', '참석 회차', '구분', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
   const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), CAT_LABEL[catOf(r)], r.a.receiptNo, catOf(r) === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.specOrg || '', r.a.projectNo,
-    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' · 관리자 승인' : '', r.rec ? r.rec.desk : '']);
+    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', (r.walkin || catOf(r) === 'over') ? sourceLabel(r) + (r.rec ? ' · 관리자 승인' : '') : '', r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 }
@@ -1255,7 +1257,7 @@ function exportRoster() {
   const rows = all.map((r, i) => `
     <tr><td>${i + 1}</td>${isAll ? `<td>${esc(sessName(r.sess))}</td>` : ''}<td>${CAT_LABEL[catOf(r)]}</td><td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.specOrg || '')}</td><td>${esc(r.a.receiptNo)}</td>
       <td>${r.rec ? esc(r.rec.checkinAt.slice(11)) : ''}</td><td class="sig">${r.rec ? `<img src="${r.rec.sig}">` : ''}</td>
-      <td>${r.walkin ? sourceLabel(r) : ''}</td></tr>`).join('');
+      <td>${r.walkin || catOf(r) === 'over' ? sourceLabel(r) : ''}</td></tr>`).join('');
   const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>서명 참석자 명단 - ${esc(isAll ? '전체 회차' : sessName(code))}</title>
 <style>body{font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;margin:24px}h1{font-size:22px;margin:0 0 4px}
 p{margin:0 0 16px;color:#555}table{width:100%;border-collapse:collapse;font-size:13px}
@@ -1538,7 +1540,13 @@ document.addEventListener('click', async e => {
   }
   if (d.openAdmin) {                                 // 참석자 명단의 '접수 처리'는 매번 비밀번호
     const a = findApplicant(d.openAdmin);
-    if (a && await askPin(`${a.name}님을 접수 처리합니다.`, true)) openApplicant(a);
+    if (!a || !await askPin(`${a.name}님을 접수 처리합니다.`, true)) return;
+    const t = today(), id = key(t, a.receiptNo);
+    if (!state.attend.has(id) && (a.walkin || a.waitlist || a.session !== t)) {   // 관리자가 비밀번호로 직접 승인한 것으로 처리
+      if (!state.approvals.has(id)) state.approvals.set(id, newApproval(a));
+      await setDecision(id, 'approved');
+    }
+    openApplicant(a);
     return;
   }
   if (d.apkind) { state.apKind = d.apkind; return renderApprovals(); }
