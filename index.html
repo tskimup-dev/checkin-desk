@@ -59,7 +59,8 @@
   @media (max-width:760px){
     header.top{gap:8px;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top))}
     .side-brand{flex:1 1 100%;max-width:none}      /* 휴대폰: 1줄 행사명, 2줄 회차·인원·잠금, 3줄 메뉴 */
-    .stats{flex:1}
+    .stats{flex:1 1 100%;order:9;min-width:0;white-space:normal;line-height:1.5}   /* 휴대폰: 인원은 메뉴 위 한 줄(넘치면 줄바꿈) */
+    .side-foot{margin-left:auto}
     #hdrSub{display:none}
     .stats{font-size:12px}
     .stats b{font-size:14px}
@@ -121,7 +122,13 @@
 
   .cert-wrap{display:flex;gap:28px;justify-content:center;align-items:center;flex-wrap:wrap}
   .cert-qr{width:290px}
-  @media (max-width:760px){ .cert-qr{order:-1;width:100%} }
+  @media (max-width:760px){
+    .cert-qr{order:-1;width:100%}
+    #certQr{min-height:190px}
+    #certQr img,#certQr canvas{width:190px!important;height:190px!important}
+    /* 휴대폰: '다음 참석자 접수하기'를 화면 아래에 항상 띄움 */
+    #btnNext{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));z-index:5;width:100%;box-shadow:0 6px 18px rgba(15,23,35,.25)}
+  }
   #certQr{display:flex;justify-content:center;min-height:260px;align-items:center}
   #certQr img,#certQr canvas{border:8px solid #fff;border-radius:6px;box-shadow:0 0 0 1px var(--line)}
   .ok-badge{display:inline-block;background:var(--ok-bg);color:var(--ok);font-weight:700;font-size:20px;padding:10px 18px;border-radius:999px;margin-bottom:16px}
