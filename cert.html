@@ -27,7 +27,7 @@
 <main>
   <h1>참석확인증</h1>
   <div id="box">
-    <img id="cert" alt="참석확인증">
+    <img id="cert" alt="참석확인증 불러오는 중…">
     <a id="save" class="btn sub" download="참석확인증.jpg">이미지로 저장</a>
     <p class="muted">버튼이 안 눌리면 참석확인증을 <b>길게 눌러</b> 저장하세요.</p>
   </div>
@@ -38,7 +38,7 @@
   </div>
 </main>
 <script>
-/* 데스크에서 보여준 QR 안에 확인증 내용이 들어 있습니다. 서버나 명단에는 접근하지 않습니다. */
+/* QR 안에 확인증 내용이 들어 있고, 서명·직인은 기록 번호와 기록별 열쇠로 데스크 시트(Apps Script)에서 불러옵니다. */
 const SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdgElv5xupD6McmsHbCVGu5Qmn1u81wVzxgjryF2YlcQEeeRg/viewform';  // 비우면 안내 숨김
 if (SURVEY_URL) document.getElementById('surveyBtn').href = SURVEY_URL;
 else document.getElementById('survey').remove();
@@ -50,7 +50,24 @@ function decode(hash) {
   return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
 }
 
-function draw(d) {
+function loadImg(src) {
+  return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+}
+
+// 데스크 시트에서 서명·직인 불러오기 (안 되면 서명 없이 표시)
+async function fetchExtra(d) {
+  if (!d.k || !d.x || !d.s) return null;
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 10000);
+    const u = 'https://script.google.com/macros/s/' + encodeURIComponent(d.s) + '/exec?action=cert&id=' +
+              encodeURIComponent(d.k) + '&tk=' + encodeURIComponent(d.x);
+    const r = await (await fetch(u, { signal: ctl.signal })).json();
+    clearTimeout(t);
+    return r && r.ok ? r : null;
+  } catch (e) { return null; }
+}
+
+async function draw(d, ex) {
   const W = 900, H = 1270;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
@@ -75,14 +92,29 @@ function draw(d) {
   });
 
   g.textAlign = 'center'; g.fillStyle = '#111'; g.font = `30px ${FONT}`;
-  g.fillText('위 사람은 위 설명회에 참석하였음을 확인합니다.', W / 2, 930, W - 160);
-  g.font = `28px ${FONT}`; g.fillText(d.y || '', W / 2, 1070);
-  if (d.i) {
-    g.font = `bold 36px ${FONT}`;
-    const tw = Math.min(g.measureText(d.i).width, W - 300);
-    g.fillText(d.i, W / 2, 1150, W - 300);
-    g.textAlign = 'left'; g.font = `22px ${FONT}`; g.fillStyle = '#555';
-    g.fillText('(직인생략)', W / 2 + tw / 2 + 14, 1148);
+  if (ex && ex.sig) {                       // 데스크 확인증과 같은 배치 (서명 포함)
+    g.fillText('위 사람은 위 설명회에 참석하였음을 확인합니다.', W / 2, 875, W - 160);
+    g.font = `22px ${FONT}`; g.fillStyle = '#666'; g.fillText('참석자 서명', W / 2, 935);
+    try { g.drawImage(await loadImg(ex.sig), W / 2 - 130, 948, 260, 130); } catch (e) {}
+    g.fillStyle = '#111'; g.font = `28px ${FONT}`; g.fillText(d.y || '', W / 2, 1140);
+    if (d.i) {
+      g.font = `bold 36px ${FONT}`;
+      const tw = Math.min(g.measureText(d.i).width, W - 240);
+      let stamped = false;
+      if (ex.stamp) { try { g.drawImage(await loadImg(ex.stamp), W / 2 + tw / 2 - 18, 1135, 82, 82); stamped = true; } catch (e) {} }
+      g.fillStyle = '#111'; g.fillText(d.i, W / 2, 1195, W - 240);
+      if (!stamped) { g.textAlign = 'left'; g.font = `22px ${FONT}`; g.fillStyle = '#555'; g.fillText('(직인생략)', W / 2 + tw / 2 + 14, 1193); }
+    }
+  } else {
+    g.fillText('위 사람은 위 설명회에 참석하였음을 확인합니다.', W / 2, 930, W - 160);
+    g.font = `28px ${FONT}`; g.fillText(d.y || '', W / 2, 1070);
+    if (d.i) {
+      g.font = `bold 36px ${FONT}`;
+      const tw = Math.min(g.measureText(d.i).width, W - 300);
+      g.fillText(d.i, W / 2, 1150, W - 300);
+      g.textAlign = 'left'; g.font = `22px ${FONT}`; g.fillStyle = '#555';
+      g.fillText('(직인생략)', W / 2 + tw / 2 + 14, 1148);
+    }
   }
   return cv.toDataURL('image/jpeg', 0.9);
 }
@@ -90,8 +122,8 @@ function draw(d) {
 (async () => {
   try {
     const d = decode(location.hash);
-    if (document.fonts) await document.fonts.ready;
-    const url = draw(d);
+    const [ex] = await Promise.all([fetchExtra(d), document.fonts ? document.fonts.ready : null]);
+    const url = await draw(d, ex);
     document.getElementById('cert').src = url;
     const a = document.getElementById('save');
     a.href = url;

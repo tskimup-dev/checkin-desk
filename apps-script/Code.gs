@@ -52,6 +52,7 @@ const OWN_TABS = Object.keys(TABLES).map(k => TABLES[k].name);
 /* ---------- 웹 앱 진입점 ---------- */
 function doGet(e) {
   const p = (e && e.parameter) || {};
+  if (p.action === 'cert') return out(certFor_(p.id, p.tk));   // 참석자 휴대폰 확인증 (비밀키 대신 기록별 열쇠로 확인)
   if (p.key !== API_KEY) return out({ ok: false, error: 'key' });
   if (p.action !== 'pull') return out({ ok: false, error: 'action' });
   const since = Number(p.since || 0);
@@ -124,6 +125,16 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ---------- 참석자 휴대폰 확인증용 서명·직인 ---------- */
+// QR에 담긴 기록 번호(id)와 그 기록에만 있는 무작위 열쇠(tk)가 모두 맞을 때만 서명을 돌려줍니다.
+function certFor_(id, tk) {
+  if (!id || !tk || String(tk).length < 12) return { ok: false };
+  const r = findRec('attend', String(id));
+  if (!r || r.deleted || r.tk !== String(tk)) return { ok: false };
+  const st = findRec('settings', 'settings');
+  return { ok: true, sig: r.sig || '', stamp: (st && st.stamp) || '' };
 }
 
 /* ---------- 참석 확인증 이메일 ---------- */

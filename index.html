@@ -1077,7 +1077,7 @@ async function submitCheckin() {
     seq: a.seq || '',
     receiptNo: a.receiptNo, name: a.name, org: a.org, specOrg: a.specOrg || '', projectNo: a.projectNo, phone: a.phone, email: a.email || '',
     checkinAt: fmt(now), checkinISO: now.toISOString(),
-    desk: state.settings.desk || '', sig: sigDataUrl(),
+    desk: state.settings.desk || '', sig: sigDataUrl(), tk: randTk(),
   };
   if (syncOn()) {                                   // 시트에 먼저 기록 (다른 데스크와 중복 방지)
     btn.textContent = '저장 중…';
@@ -1242,11 +1242,18 @@ async function sendCertMail() {
   }
 }
 
-// 신청자 휴대폰용 확인증 링크 (확인증 내용만 담음, 서명·직인 제외)
+function randTk() {                                  // 휴대폰 확인증에서 서명을 불러올 때 쓰는 기록별 열쇠
+  const a = new Uint8Array(12); crypto.getRandomValues(a);
+  return Array.from(a, b => (b % 36).toString(36)).join('');
+}
+
+// 신청자 휴대폰용 확인증 링크 (확인증 내용 + 서명을 시트에서 불러올 번호·열쇠)
 function certLink(rec) {
   const s = state.settings, info = sessionInfo(rec.session);
   const d = { n: rec.name, o: rec.org, p: rec.projectNo, c: sessName(rec.session) || rec.session,
               t: String(rec.checkinAt || '').slice(0, 10), y: fmtKo(new Date(rec.checkinISO)), e: s.eventName, d: info.date, l: info.place, i: s.issuer };
+  const sid = (String(s.syncUrl || '').match(/\/macros\/s\/([\w-]+)\/exec/) || [])[1];
+  if (syncOn() && sid && rec.tk) { d.k = rec.id; d.x = rec.tk; d.s = sid; }
   Object.keys(d).forEach(k => { if (!d[k]) delete d[k]; });
   const bytes = new TextEncoder().encode(JSON.stringify(d));
   const b64 = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
