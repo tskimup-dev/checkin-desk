@@ -119,7 +119,7 @@ async function draw(d, ex) {
   g.textAlign = 'center'; g.fillStyle = '#111'; g.font = `30px ${FONT}`;
   if (ex && ex.sig) {                       // 데스크 확인증과 같은 배치 (서명 포함)
     g.fillText('위 사람은 위 설명회에 참석하였음을 확인합니다.', W / 2, 875, W - 160);
-    g.font = `22px ${FONT}`; g.fillStyle = '#666'; g.fillText('참석자 서명', W / 2, 935);
+    g.font = `22px ${FONT}`; g.fillStyle = '#666'; g.fillText(/\(대리 참석:/.test(d.n || '') ? '대리인 서명' : '참석자 서명', W / 2, 935);
     try { g.drawImage(await loadImg(ex.sig), W / 2 - 130, 948, 260, 130); } catch (e) {}
     g.fillStyle = '#111'; g.font = `28px ${FONT}`; g.fillText(d.y || '', W / 2, 1140);
     if (d.i) drawIssuer(g, d.i, 1195, FONT);

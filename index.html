@@ -110,6 +110,7 @@
   dl.kv dt{color:var(--muted)}
   dl.kv dd{margin:0;font-weight:600;word-break:break-all}
   .sig-label{margin:18px 0 8px;font-weight:600}
+  .proxy{margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fafbfc}
   .sig-wrap{position:relative;border:2px dashed #b9c2cf;border-radius:12px;background:#fff}
   #sigPad{display:block;width:100%;aspect-ratio:2/1;touch-action:none;cursor:crosshair}
   .sig-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c3c9d2;font-size:28px;pointer-events:none}
@@ -287,7 +288,17 @@
     <div class="card">
       <div id="confirmInfo"></div>
       <div id="confirmWarn"></div>
-      <div class="sig-label">아래 칸에 서명해 주세요</div>
+      <div id="proxyWrap" class="proxy">
+        <label class="row" style="gap:8px;align-items:center;flex-wrap:nowrap;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="pxOn" style="width:auto;margin:0"> 대리 참석 <span class="muted" style="font-weight:400;font-size:14px">(신청자 대신 다른 분이 오신 경우)</span>
+        </label>
+        <div id="pxBox" class="grid hidden" style="margin-top:10px">
+          <label>대리인 성명 *<input id="pxName" autocomplete="off"></label>
+          <label>대리인 휴대폰번호 *<input id="pxPhone" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="01012345678 (- 없이)"></label>
+          <label>대리인 이메일 (선택)<input id="pxEmail" type="email" inputmode="email" autocomplete="off" placeholder="참석 확인증을 이메일로 받으려면 입력"></label>
+        </div>
+      </div>
+      <div class="sig-label" id="sigLabel">아래 칸에 서명해 주세요</div>
       <div class="sig-wrap">
         <canvas id="sigPad"></canvas>
         <span class="sig-hint" id="sigHint">여기에 서명</span>
@@ -833,7 +844,7 @@ function openApplicant(a) {
   if (done) {
     beep(false);
     go('view-lookup');
-    return lookupMsg(`<b>${esc(a.name)}</b>님은 이 회차에 이미 참석 처리되었습니다. (${esc(done.checkinAt)} · ${esc(done.desk)})
+    return lookupMsg(`<b>${esc(a.name)}</b>님은 이 회차에 이미 참석 처리되었습니다. (${esc(done.checkinAt)} · ${esc(done.desk)}${done.proxyName ? ` · 대리 참석: ${esc(done.proxyName)}` : ''})
       <div class="btns"><button type="button" class="small" data-cert="${esc(id)}">확인증 다시 보기</button></div>`, 'warn');
   }
 
@@ -877,9 +888,22 @@ function openConfirm(a, approved) {
   $('#confirmWarn').innerHTML = !approved ? ''
     : `<div class="msg ok">관리자 승인으로 ${a.walkin ? '현장 신청자' : a.waitlist ? '신청대기자' : '다른 회차 신청자'}의 참석을 확인합니다.</div>`;
   $('#confirmMsg').innerHTML = '';
+  $('#proxyWrap').classList.toggle('hidden', !!a.walkin);          // 현장 신청은 본인이 직접 작성하므로 대리 없음
+  $('#pxOn').checked = false; setProxyUi();
+  ['#pxName', '#pxPhone', '#pxEmail'].forEach(x => $(x).value = '');
   go('view-confirm');
   requestAnimationFrame(sizeSig);
 }
+
+function setProxyUi() {
+  const on = $('#pxOn').checked;
+  $('#pxBox').classList.toggle('hidden', !on);
+  $('#sigLabel').textContent = on ? '대리인께서 아래 칸에 서명해 주세요' : '아래 칸에 서명해 주세요';
+  if (on) setTimeout(() => $('#pxName').focus(), 30);
+}
+// 확인증에 쓰는 이름: 대리 참석이면 '신청자 (대리 참석: 대리인)'
+const certName = rec => rec.proxyName ? `${rec.name} (대리 참석: ${rec.proxyName})` : rec.name;
+const rosterName = rec => rec && rec.proxyName ? ` (대리: ${rec.proxyName})` : '';
 
 /* ===================== 현장 신청 ===================== */
 function openWalkinForm() {
@@ -1068,6 +1092,14 @@ async function submitCheckin() {
     return;
   }
   const a = cur.a, t = today();
+  let proxy = null;
+  if ($('#pxOn').checked && !a.walkin) {
+    const pn = $('#pxName').value.trim(), pp = $('#pxPhone').value.trim(), pe = $('#pxEmail').value.trim();
+    const bad = !pn ? '대리인 성명을 입력해 주세요.' : !/^0\d{9,10}$/.test(pp) ? '대리인 휴대폰번호를 숫자 10~11자리로 입력해 주세요.'
+      : pe && !isEmail(pe) ? '대리인 이메일 주소 형식을 확인해 주세요.' : '';
+    if (bad) { $('#confirmMsg').innerHTML = `<div class="msg err">${bad}</div>`; return; }
+    proxy = { proxyName: pn, proxyPhone: pp, proxyEmail: pe };
+  }
   const btn = $('#btnSubmit');
   btn.disabled = true;
   const now = new Date();
@@ -1078,6 +1110,7 @@ async function submitCheckin() {
     receiptNo: a.receiptNo, name: a.name, org: a.org, specOrg: a.specOrg || '', projectNo: a.projectNo, phone: a.phone, email: a.email || '',
     checkinAt: fmt(now), checkinISO: now.toISOString(),
     desk: state.settings.desk || '', sig: sigDataUrl(), tk: randTk(),
+    ...(proxy || {}),
   };
   if (syncOn()) {                                   // 시트에 먼저 기록 (다른 데스크와 중복 방지)
     btn.textContent = '저장 중…';
@@ -1143,7 +1176,7 @@ async function drawCertificate(rec) {
   g.font = `bold 64px ${CERT_FONT}`; g.fillText('참 석 확 인 증', W / 2, 190);
 
   const rows = [
-    ['성      명', rec.name], ['소속기관', rec.org], ['과제번호', rec.projectNo],
+    ['성      명', certName(rec)], ['소속기관', rec.org], ['과제번호', rec.projectNo],
     ['설 명 회', s.eventName], ['회      차', sessName(rec.session) || rec.session], ['일      시', info.date],
     ['장      소', info.place], ['참석확인', String(rec.checkinAt || '').slice(0, 10)],
   ].filter(([, v]) => v);
@@ -1157,7 +1190,7 @@ async function drawCertificate(rec) {
   g.textAlign = 'center'; g.fillStyle = '#111'; g.font = `30px ${CERT_FONT}`;
   g.fillText('위 사람은 위 설명회에 참석하였음을 확인합니다.', W / 2, 875, W - 160);
 
-  g.font = `22px ${CERT_FONT}`; g.fillStyle = '#666'; g.fillText('참석자 서명', W / 2, 935);
+  g.font = `22px ${CERT_FONT}`; g.fillStyle = '#666'; g.fillText(rec.proxyName ? '대리인 서명' : '참석자 서명', W / 2, 935);
   try { g.drawImage(await loadImg(rec.sig), W / 2 - 130, 948, 260, 130); } catch (e) {}
 
   g.fillStyle = '#111'; g.font = `28px ${CERT_FONT}`;
@@ -1182,6 +1215,7 @@ function maskEmail(v) {
   return (id.length <= 3 ? id.slice(0, 1) + '**' : id.slice(0, 3) + '*'.repeat(Math.min(5, id.length - 3))) + '@' + dom;
 }
 function certEmailOf(rec) {
+  if (rec.proxyName) return (rec.proxyEmail || '').trim();          // 대리 참석이면 대리인 이메일로
   const a = findApplicant(rec.receiptNo);
   return (rec.email || (a && a.email) || '').trim();
 }
@@ -1197,11 +1231,11 @@ function renderCertMail(rec) {
   btn.classList.remove('hidden');
   if (!isEmail(to)) {                                          // 명단에 이메일이 없으면 그 자리에서 입력
     const noEmailInList = !state.applicants.some(a => a.email);
-    $('#certMailTo').textContent = noEmailInList
+    $('#certMailTo').textContent = rec.proxyName ? '대리인 이메일 주소를 입력해 주세요.' : noEmailInList
       ? '명단에 이메일 정보가 아직 없습니다. 받을 주소를 입력해 주세요.'
       : '등록된 이메일 주소가 없습니다. 받을 주소를 입력해 주세요.';
   } else {
-    $('#certMailTo').textContent = `신청 시 입력한 ${maskEmail(to)} 로 보내드립니다.`;
+    $('#certMailTo').textContent = rec.proxyName ? `대리인 이메일 ${maskEmail(to)} 로 보내드립니다.` : `신청 시 입력한 ${maskEmail(to)} 로 보내드립니다.`;
   }
   btn.disabled = false;
   btn.textContent = rec.mailedAt ? '다시 보내기' : '이메일로 받기';
@@ -1219,7 +1253,7 @@ async function sendCertMail() {
   }
   const s = state.settings, info = sessionInfo(rec.session);
   const op = {
-    action: 'sendCert', to, name: rec.name, receiptNo: rec.receiptNo,
+    action: 'sendCert', to, name: certName(rec), receiptNo: rec.receiptNo,
     eventName: s.eventName, sessionName: sessName(rec.session), date: info.date, place: info.place, sender: s.issuer,
     img: $('#certImg').src, link: certLink(rec), ts: Date.now(),
   };
@@ -1255,7 +1289,7 @@ function randTk() {                                  // 휴대폰 확인증에�
 // 신청자 휴대폰용 확인증 링크 (확인증 내용 + 서명을 시트에서 불러올 번호·열쇠)
 function certLink(rec) {
   const s = state.settings, info = sessionInfo(rec.session);
-  const d = { n: rec.name, o: rec.org, p: rec.projectNo, c: sessName(rec.session) || rec.session,
+  const d = { n: certName(rec), o: rec.org, p: rec.projectNo, c: sessName(rec.session) || rec.session,
               t: String(rec.checkinAt || '').slice(0, 10), y: fmtKo(new Date(rec.checkinISO)), e: s.eventName, d: info.date, l: info.place, i: s.issuer };
   const sid = (String(s.syncUrl || '').match(/\/macros\/s\/([\w-]+)\/exec/) || [])[1];
   if (syncOn() && sid && rec.tk) { d.k = rec.id; d.x = rec.tk; d.s = sid; }
@@ -1319,14 +1353,15 @@ function renderList() {
 
   $('#listBody').innerHTML = rows.length ? rows.map(r => {
     const c = catOf(r);
-    const note = c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>` : !r.walkin || c === 'walkin' ? ''
-      : `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>`;
+    const px = r.rec && r.rec.proxyName ? `<span class="pill warn">대리 참석</span> <span class="muted" style="font-size:12px">${esc(r.rec.proxyName)} · ${esc(maskPhone(r.rec.proxyPhone))}</span> ` : '';
+    const note = px + (c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>` : !r.walkin || c === 'walkin' ? ''
+      : `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>`);
     let action = '';
     if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
                          <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
     else if (r.sess === today()) action = `<button type="button" class="small" data-open-admin="${esc(r.a.receiptNo)}">접수 처리</button>`;
     return `<tr class="${r.rec ? '' : 'absent'}">
-      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw">${catPill(c)}</td><td class="rno">${esc(r.a.receiptNo)}</td><td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="pno">${esc(r.a.projectNo)}</td><td class="org">${esc(r.a.specOrg || '')}</td>
+      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw">${catPill(c)}</td><td class="rno">${esc(r.a.receiptNo)}</td><td class="nw"><b>${esc(r.a.name)}</b>${r.rec && r.rec.proxyName ? `<br><span class="muted" style="font-size:12px">대리: ${esc(r.rec.proxyName)}</span>` : ''}</td><td class="org">${esc(r.a.org)}</td><td class="pno">${esc(r.a.projectNo)}</td><td class="org">${esc(r.a.specOrg || '')}</td>
       <td class="nw">${r.rec ? `<span class="pill ok">참석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미참석</span>'}</td>
       <td class="sig">${r.rec ? `<img src="${r.rec.sig}" alt="서명">` : ''}</td>
       <td>${note}</td><td class="nw">${action}</td></tr>`;
@@ -1339,8 +1374,9 @@ function exportCsv() {
   if (!all.length) return alert('이 회차의 명단이 없습니다.');
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
   const head = ['No', '참석 회차', '구분', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
-  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), CAT_LABEL[catOf(r)], r.a.receiptNo, catOf(r) === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.specOrg || '', r.a.projectNo,
-    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', (r.walkin || catOf(r) === 'over') ? sourceLabel(r) + (r.rec ? ' · 관리자 승인' : '') : '', r.rec ? r.rec.desk : '']);
+  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), CAT_LABEL[catOf(r)], r.a.receiptNo, catOf(r) === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name + rosterName(r.rec), r.a.org, r.a.specOrg || '', r.a.projectNo,
+    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', [(r.walkin || catOf(r) === 'over') ? sourceLabel(r) + (r.rec ? ' · 관리자 승인' : '') : '',
+      r.rec && r.rec.proxyName ? `대리 참석: ${r.rec.proxyName} (${normPhone(r.rec.proxyPhone)})` : ''].filter(Boolean).join(' / '), r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 }
@@ -1353,9 +1389,9 @@ function exportRoster() {
   const s = state.settings, info = isAll ? {} : sessionInfo(code);
   const nIn = all.filter(r => r.rec).length;
   const rows = all.map((r, i) => `
-    <tr><td>${i + 1}</td>${isAll ? `<td>${esc(sessName(r.sess))}</td>` : ''}<td>${CAT_LABEL[catOf(r)]}</td><td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.specOrg || '')}</td><td>${esc(r.a.receiptNo)}</td>
+    <tr><td>${i + 1}</td>${isAll ? `<td>${esc(sessName(r.sess))}</td>` : ''}<td>${CAT_LABEL[catOf(r)]}</td><td>${esc(r.a.name + rosterName(r.rec))}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.specOrg || '')}</td><td>${esc(r.a.receiptNo)}</td>
       <td>${r.rec ? esc(r.rec.checkinAt.slice(11)) : ''}</td><td class="sig">${r.rec ? `<img src="${r.rec.sig}">` : ''}</td>
-      <td>${r.walkin || catOf(r) === 'over' ? sourceLabel(r) : ''}</td></tr>`).join('');
+      <td>${esc([r.walkin || catOf(r) === 'over' ? sourceLabel(r) : '', r.rec && r.rec.proxyName ? '대리 참석' : ''].filter(Boolean).join(' · '))}</td></tr>`).join('');
   const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>서명 참석자 명단 - ${esc(isAll ? '전체 회차' : sessName(code))}</title>
 <style>body{font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;margin:24px}h1{font-size:22px;margin:0 0 4px}
 p{margin:0 0 16px;color:#555}table{width:100%;border-collapse:collapse;font-size:13px}
@@ -1581,6 +1617,11 @@ async function loadStamp(file) {
 
 /* ===================== 휴대폰번호 11자리 제한 ===================== */
 // 현장 신청: 숫자만, 최대 11자리 / 조회 칸: 숫자로만 입력할 때(휴대폰번호)만 11자리 제한, 접수번호(영문 포함)는 그대로
+$('#pxOn').addEventListener('change', setProxyUi);
+$('#pxPhone').addEventListener('input', e => {
+  const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+  if (v !== e.target.value) e.target.value = v;
+});
 $('#wPhone').addEventListener('input', e => {
   const v = e.target.value.replace(/\D/g, '').slice(0, 11);
   if (v !== e.target.value) e.target.value = v;

@@ -23,7 +23,7 @@ const TABLES = {
     name: '참석기록',
     cols: ['id', '회차', '접수번호', '성명', '기관', '과제번호', '휴대폰번호', '참석시각', '데스크', '구분'],
     idOf: r => r.id,
-    row: r => [r.id, r.session, r.receiptNo, r.name, r.org, r.projectNo, r.phone, r.checkinAt, r.desk,
+    row: r => [r.id, r.session, r.receiptNo, r.name + (r.proxyName ? ' (대리 참석: ' + r.proxyName + ' ' + (r.proxyPhone || '') + ')' : ''), r.org, r.projectNo, r.phone, r.checkinAt, r.desk,
                r.source === 'walkin' ? '현장접수'
                  : r.source === 'waitlist' ? '신청대기 (' + (r.seq || '?') + '번' + (r.appliedSession && r.appliedSession !== r.session ? ', 원래 신청: ' + r.appliedSession : '') + ')'
                  : r.source === 'other' ? '정원 내 · 타 회차 승인 (원래 신청: ' + (r.appliedSession || '미확인') + ')' : '정원 내'],
@@ -32,7 +32,7 @@ const TABLES = {
     name: '승인',
     cols: ['id', '회차', '접수번호', '성명', '기관', '신청회차', '현장신청', '상태', '요청시각', '처리시각', '데스크'],
     idOf: r => r.id,
-    row: r => [r.id, r.session, r.receiptNo, r.name, r.org, r.appliedSession, r.walkin ? 'Y' : r.waitlist ? '대기 ' + (r.seq || '') + '번' : '',
+    row: r => [r.id, r.session, r.receiptNo, r.name + (r.proxyName ? ' (대리 참석: ' + r.proxyName + ' ' + (r.proxyPhone || '') + ')' : ''), r.org, r.appliedSession, r.walkin ? 'Y' : r.waitlist ? '대기 ' + (r.seq || '') + '번' : '',
                r.status, r.requestedAt, r.decidedAt, r.desk],
   },
   walkins: {
