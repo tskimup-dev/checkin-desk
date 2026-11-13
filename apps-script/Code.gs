@@ -12,6 +12,7 @@
  */
 const SHEET_ID = '여기에_스프레드시트_ID';   // 시트 주소 .../spreadsheets/d/【이 부분】/edit
 const API_KEY  = '여기에_비밀키';            // 영문·숫자를 섞어 16자 이상 권장
+const MAIL_FROM = 'info@rndhelp.co.kr';      // 확인증 메일 발신 주소 (아래 sendCert_ 설명 참고)
 
 // 각 탭: 사람이 읽는 열들 + [updatedAt, deleted, data(JSON 원본)]
 const TABLES = {
@@ -134,20 +135,37 @@ function sendCert_(b) {
   const attachments = m ? [Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1],
     '참석확인증_' + String(b.name || '').replace(/[\\/:*?"<>|]/g, '') + (m[1] === 'png' ? '.png' : '.jpg'))] : [];
   const when = [b.sessionName, b.date, b.place].filter(String).join(' · ');
-  MailApp.sendEmail({
-    to: to,
-    subject: '[' + (b.eventName || '설명회') + '] 참석 확인증',
-    name: b.sender || b.eventName || '설명회 접수데스크',
-    htmlBody:
+  const htmlBody =
       '<div style="font-family:Malgun Gothic,Apple SD Gothic Neo,sans-serif;font-size:15px;line-height:1.7;color:#16202c">' +
       '<p><b>' + h(b.name) + '</b>님, <b>' + h(b.eventName) + '</b>에 참석해 주셔서 감사합니다.</p>' +
       (when ? '<p style="color:#555">' + h(when) + '</p>' : '') +
       '<p>참석 확인증을 첨부해 드립니다.' + (b.link ? ' 아래 버튼으로도 확인하실 수 있습니다.' : '') + '</p>' +
       (b.link ? '<p><a href="' + h(b.link) + '" style="display:inline-block;padding:10px 18px;background:#1f5fbf;color:#fff;border-radius:8px;text-decoration:none">참석 확인증 보기</a></p>' : '') +
-      '<p style="color:#888;font-size:12px">본 메일은 발신 전용입니다. 접수번호 ' + h(b.receiptNo) + '</p></div>',
-    attachments: attachments,
-  });
+      '<p style="color:#888;font-size:12px">문의: ' + h(MAIL_FROM) + ' · 접수번호 ' + h(b.receiptNo) + '</p></div>';
+  const subject = '[' + (b.eventName || '설명회') + '] 참석 확인증';
+  const name = b.sender || b.eventName || '설명회 접수데스크';
+  if (mailMode_() === 'alias') {
+    GmailApp.sendEmail(to, subject, '참석 확인증을 첨부해 드립니다.', {
+      from: MAIL_FROM, name: name, replyTo: MAIL_FROM, htmlBody: htmlBody, attachments: attachments });
+  } else {
+    MailApp.sendEmail({ to: to, subject: subject, name: name, htmlBody: htmlBody, attachments: attachments,
+      replyTo: MAIL_FROM || undefined });
+  }
   return { ok: true, left: MailApp.getRemainingDailyQuota() };
+}
+
+// 발신 주소 결정
+//  - 이 스크립트를 배포한 계정이 MAIL_FROM 자체이거나, 그 Gmail에 MAIL_FROM이 '다른 주소에서 메일 보내기'로
+//    등록돼 있으면 → 발신인이 MAIL_FROM 으로 표시됩니다.
+//  - 아니면 배포 계정 주소로 발송되고, 받은 사람이 '답장'을 누르면 MAIL_FROM 으로 갑니다.
+function mailMode_() {
+  if (!MAIL_FROM) return 'self';
+  const me = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
+  if (me === MAIL_FROM.toLowerCase()) return 'self';
+  try {
+    if (GmailApp.getAliases().map(a => a.toLowerCase()).indexOf(MAIL_FROM.toLowerCase()) >= 0) return 'alias';
+  } catch (e) {}
+  return 'replyTo';
 }
 
 /* ---------- 신청자 명단 읽기 ---------- */
@@ -267,6 +285,10 @@ function out(o) {
 function testSetup() {
   Object.keys(TABLES).forEach(sheetOf);
   Logger.log('오늘 남은 메일 발송 가능 수: ' + MailApp.getRemainingDailyQuota() + '통');   // 메일 권한 승인용
+  const mode = mailMode_();
+  Logger.log('발신 주소: ' + (mode === 'replyTo'
+    ? Session.getEffectiveUser().getEmail() + ' (답장 주소만 ' + MAIL_FROM + ' — 별칭 미등록)'
+    : (mode === 'alias' ? MAIL_FROM + ' (Gmail 별칭)' : Session.getEffectiveUser().getEmail())));
   const list = readApplicants();
   Logger.log('명단 ' + list.length + '명, CONFIRMED ' + list.filter(a => a.status.toUpperCase() === 'CONFIRMED').length + '명');
   const w = readWaitlist();
