@@ -1930,8 +1930,23 @@ function showGate() {
 
 /* ===================== 모바일 · 오프라인 ===================== */
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // 새 버전이 올라오면 자동 적용: 5분마다 확인하고, 접수 중이 아닐 때(조회 화면이 비어 있을 때) 새로고침
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    setInterval(() => reg.update().catch(() => {}), 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  let hadCtrl = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadCtrl) { hadCtrl = true; return; }          // 첫 설치는 새로고침 불필요
+    state.needReload = true; reloadIfIdle();
+  });
 }
+function reloadIfIdle() {
+  if (!state.needReload) return;
+  const busy = state.view !== 'view-lookup' || $('#q').value.trim() || document.querySelector('.modal:not(.hidden)');
+  if (!busy) location.reload();
+}
+setInterval(reloadIfIdle, 30 * 1000);
 if (navigator.storage && navigator.storage.persist) {   // 브라우저가 기록을 임의로 지우지 않도록 요청
   navigator.storage.persist().catch(() => {});
 }

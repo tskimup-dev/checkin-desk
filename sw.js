@@ -1,13 +1,13 @@
 // 오프라인 동작용 서비스 워커
 // index.html을 고친 뒤 다시 올릴 때는 아래 VERSION 숫자를 올려 주세요.
-const VERSION = 'v54';
+const VERSION = 'v55';
 const CACHE = 'checkin-desk-' + VERSION;
 const SHELL = ['./', './index.html', './cert.html', './qr.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    await c.addAll(SHELL);
+    await c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })));
     self.skipWaiting();
   })());
 });
@@ -28,7 +28,7 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
-        const r = await fetch(req);
+        const r = await fetch(req, { cache: 'no-cache' });   // 브라우저 임시 저장본 말고 서버 최신본 확인
         if (r.ok) {
           const c = await caches.open(CACHE);
           const page = url.pathname.endsWith('cert.html') ? './cert.html' : './index.html';
