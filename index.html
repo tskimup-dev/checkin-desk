@@ -314,6 +314,7 @@
           <div id="certMail" class="cert-mail hidden">
             <div style="font-weight:700;font-size:16px;margin-top:16px">이메일로 받기</div>
             <p class="muted" style="margin:4px 0 8px;font-size:14px"><span id="certMailTo"></span></p>
+            <input id="certMailIn" type="email" inputmode="email" autocomplete="off" placeholder="받을 이메일 주소 입력" class="hidden" style="margin-bottom:8px">
             <button type="button" class="primary" id="btnMail" style="width:100%">이메일로 참석 확인증 받기</button>
             <div id="certMailMsg"></div>
           </div>
@@ -1187,13 +1188,17 @@ function renderCertMail(rec) {
   if (!syncOn()) return box.classList.add('hidden');           // 메일은 구글 시트 연동(Apps Script)으로 보냄
   box.classList.remove('hidden');
   const btn = $('#btnMail');
-  if (!isEmail(to)) {
-    $('#certMailTo').textContent = '등록된 이메일 주소가 없습니다. QR로 받아 주세요.';
-    btn.classList.add('hidden');
-    return;
-  }
-  $('#certMailTo').textContent = `신청 시 입력한 ${maskEmail(to)} 로 보내드립니다.`;
+  const inp = $('#certMailIn');
+  inp.value = ''; inp.classList.toggle('hidden', isEmail(to));
   btn.classList.remove('hidden');
+  if (!isEmail(to)) {                                          // 명단에 이메일이 없으면 그 자리에서 입력
+    const noEmailInList = !state.applicants.some(a => a.email);
+    $('#certMailTo').textContent = noEmailInList
+      ? '명단에 이메일 정보가 아직 없습니다. 받을 주소를 입력해 주세요.'
+      : '등록된 이메일 주소가 없습니다. 받을 주소를 입력해 주세요.';
+  } else {
+    $('#certMailTo').textContent = `신청 시 입력한 ${maskEmail(to)} 로 보내드립니다.`;
+  }
   btn.disabled = false;
   btn.textContent = rec.mailedAt ? '다시 보내기' : '이메일로 참석 확인증 받기';
   if (rec.mailedAt) $('#certMailMsg').innerHTML = `<div class="msg ok">${esc(rec.mailedAt)}에 보냈습니다.</div>`;
@@ -1201,7 +1206,13 @@ function renderCertMail(rec) {
 async function sendCertMail() {
   const rec = state.mailRec;
   if (!rec) return;
-  const to = certEmailOf(rec), btn = $('#btnMail');
+  const btn = $('#btnMail');
+  let to = certEmailOf(rec);
+  if (!isEmail(to)) {
+    to = $('#certMailIn').value.trim();
+    if (!isEmail(to)) { $('#certMailMsg').innerHTML = '<div class="msg err">이메일 주소를 정확히 입력해 주세요.</div>'; return; }
+    rec.email = to;                                            // 입력한 주소를 이 참석 기록에 저장
+  }
   const s = state.settings, info = sessionInfo(rec.session);
   const op = {
     action: 'sendCert', to, name: rec.name, receiptNo: rec.receiptNo,
