@@ -10,15 +10,16 @@
   :root{--bg:#f3f5f8;--text:#16202c;--muted:#6b7684;--primary:#1f5fbf;--line:#e2e6ec}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;line-height:1.5}
-  main{max-width:520px;margin:0 auto;padding:20px 16px calc(28px + env(safe-area-inset-bottom));text-align:center}
-  h1{font-size:20px;margin:4px 0 14px}
-  #cert{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:300px}
+  main{max-width:520px;margin:0 auto;padding:14px 16px calc(28px + env(safe-area-inset-bottom));text-align:center}
+  h1{font-size:19px;margin:2px 0 10px}
+  #cert{display:block;width:52%;max-width:240px;margin:0 auto;box-shadow:0 2px 10px rgba(0,0,0,.08);border:1px solid var(--line);border-radius:6px;background:#fff;min-height:300px}
   .btn{display:inline-block;margin-top:14px;padding:13px 22px;border-radius:10px;background:var(--primary);color:#fff;font-size:17px;font-weight:600;text-decoration:none;border:0}
-  .muted{color:var(--muted);font-size:14px;margin:10px 0 0}
-  .survey{margin-top:22px;padding:18px 16px;border:2px solid var(--primary);border-radius:14px;background:#f2f7ff;text-align:center}
-  .survey h2{margin:0 0 6px;font-size:18px;color:var(--primary)}
-  .survey p{margin:0 0 12px;font-size:15px;color:var(--text)}
-  .survey .btn{margin-top:0;width:100%}
+  .muted{color:var(--muted);font-size:13px;margin:8px 0 0}
+  .btn.sub{margin-top:10px;padding:9px 18px;font-size:15px;background:#fff;color:var(--primary);border:1.5px solid var(--primary)}
+  .survey{margin-top:14px;padding:16px;border:2px solid var(--primary);border-radius:14px;background:#f2f7ff;text-align:center}
+  .survey h2{margin:0 0 6px;font-size:19px;color:var(--primary)}
+  .survey p{margin:0 0 12px;font-size:14px;color:var(--text)}
+  .survey .btn{margin-top:0;width:100%;padding:15px 22px;font-size:18px;box-shadow:0 3px 10px rgba(31,95,191,.3)}
   .err{background:#fdecea;color:#b42318;border-radius:10px;padding:16px;text-align:left}
 </style>
 </head>
@@ -27,12 +28,12 @@
   <h1>참석확인증</h1>
   <div id="box">
     <img id="cert" alt="참석확인증">
-    <a id="save" class="btn" download="참석확인증.jpg">이미지로 저장</a>
-    <p class="muted">저장 버튼이 안 되면 확인증 이미지를 <b>길게 눌러 '사진에 저장'</b> 하세요.</p>
+    <a id="save" class="btn sub" download="참석확인증.jpg">이미지로 저장</a>
+    <p class="muted">안 되면 이미지를 <b>길게 눌러</b> 저장하세요.</p>
   </div>
   <div class="survey" id="survey">
     <h2>📝 만족도 조사에 참여해 주세요</h2>
-    <p>오늘 설명회는 어떠셨나요? 남겨 주신 의견은 다음 설명회를 더 알차게 준비하는 데 소중히 반영하겠습니다.</p>
+    <p>오늘 설명회는 어떠셨나요? 남겨 주신 의견은<br>다음 설명회 준비에 소중히 반영하겠습니다.</p>
     <a class="btn" id="surveyBtn" target="_blank" rel="noopener">만족도 조사 참여하기</a>
   </div>
 </main>
