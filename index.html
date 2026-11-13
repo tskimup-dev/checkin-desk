@@ -1871,7 +1871,13 @@ async function connectSync(url, key) {
   state.lastResetAt = r.resetAt || 0; await DB.set('lastResetAt', state.lastResetAt).catch(() => {});
   if (!sheetHasSettings) { state.outbox.push({ action: 'settings', data: sharedSettings(), ts: Date.now() }); await DB.set('outbox', state.outbox).catch(() => {}); }
   await syncTick(true);
-  return r.applicants ? r.applicants.length : 0;
+  return { a: (r.applicants || []).length, w: Array.isArray(r.waitlist) ? r.waitlist.length : null };
+}
+
+function syncCountMsg(n) {                           // 연동 결과: 신청자·대기자 몇 명 받아왔는지
+  const cA = state.applicants.filter(isAllowed).length, cW = state.waitlist.filter(isAllowed).length;
+  return `연동되었습니다. 시트에서 신청자 ${n.a}명(정원 내 확정 ${cA}명)` +
+    (n.w === null ? '을 받아왔습니다. 대기자는 받아오지 못했습니다 (Apps Script 코드가 예전 버전입니다).' : `, 대기자 ${n.w}명(신청대기 ${cW}명)을 받아왔습니다.`);
 }
 
 async function saveSync() {
@@ -1880,7 +1886,7 @@ async function saveSync() {
     const n = await connectSync($('#sSyncUrl').value, $('#sSyncKey').value);
     if (n === null) return fillSyncForm();
     fillSyncForm(); showImportInfo();
-    $('#syncMsg').innerHTML = `<div class="msg ok">연동되었습니다. 시트에서 명단 ${n}명을 받아왔습니다.</div>`;
+    $('#syncMsg').innerHTML = `<div class="msg ok">${syncCountMsg(n)}</div>`;
   } catch (e) {
     $('#syncMsg').innerHTML = `<div class="msg err">연결하지 못했습니다: ${esc(e.name === 'AbortError' ? '응답 시간 초과' : e.message)}</div>`;
   }
@@ -1917,7 +1923,7 @@ async function handleConnectLink() {
   if (!cfg || !confirm('이 기기를 구글 시트와 연동할까요?')) return false;
   try {
     const n = await connectSync(cfg.u, cfg.k);
-    if (n !== null) alert(`연동되었습니다. 명단 ${n}명을 받아왔습니다.`);
+    if (n !== null) alert(syncCountMsg(n));
     return true;
   } catch (e) { alert('연동하지 못했습니다: ' + e.message); return false; }
 }
@@ -1978,7 +1984,7 @@ function showGate() {
         if (n === null) return render();
         m = state.settings.adminPin ? 'pin' : 'set';
         render();
-        $('#gateMsg').innerHTML = `<div class="msg ok">연동되었습니다. 명단 ${n}명을 받아왔습니다.</div>`;
+        $('#gateMsg').innerHTML = `<div class="msg ok">${syncCountMsg(n)}</div>`;
       } catch (e) { err('연결하지 못했습니다: ' + (e.name === 'AbortError' ? '응답 시간 초과' : e.message)); }
     };
     const onKey = e => { if (e.key === 'Enter') ok(); };
