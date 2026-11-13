@@ -1204,7 +1204,7 @@ function renderList() {
   const isAll = code === 'ALL';
   $('#listSession').innerHTML = `<option value="ALL" ${isAll ? 'selected' : ''}>전체 회차 (통합)</option>` + SESSIONS.map(s =>
     `<option value="${s.code}" ${s.code === code ? 'selected' : ''}>${esc(s.name)} (${s.code})${s.code === today() ? ' · 현재' : ''}</option>`).join('');
-  $('#listHead').innerHTML = `<tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>구분</th><th>성명</th><th>연구개발기관명</th><th>과제번호</th><th>전문기관</th><th>접수번호</th><th>참석</th><th>서명</th><th>비고</th><th></th></tr>`;
+  $('#listHead').innerHTML = `<tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>구분</th><th>접수번호</th><th>성명</th><th>연구개발기관명</th><th>과제번호</th><th>전문기관</th><th>참석</th><th>서명</th><th>비고</th><th></th></tr>`;
 
   const kind = $('#listKind').value || 'all';
   const all = buildRoster(code).filter(r => kind === 'all' || catOf(r) === kind);
@@ -1226,7 +1226,7 @@ function renderList() {
                          <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
     else if (r.sess === today()) action = `<button type="button" class="small" data-open-admin="${esc(r.a.receiptNo)}">접수 처리</button>`;
     return `<tr class="${r.rec ? '' : 'absent'}">
-      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw">${catPill(c)}</td><td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="pno">${esc(r.a.projectNo)}</td><td class="org">${esc(r.a.specOrg || '')}</td><td class="rno">${esc(r.a.receiptNo)}</td>
+      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw">${catPill(c)}</td><td class="rno">${esc(r.a.receiptNo)}</td><td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="pno">${esc(r.a.projectNo)}</td><td class="org">${esc(r.a.specOrg || '')}</td>
       <td class="nw">${r.rec ? `<span class="pill ok">참석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미참석</span>'}</td>
       <td class="sig">${r.rec ? `<img src="${r.rec.sig}" alt="서명">` : ''}</td>
       <td>${note}</td><td class="nw">${action}</td></tr>`;
