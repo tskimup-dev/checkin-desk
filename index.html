@@ -1128,12 +1128,11 @@ async function drawCertificate(rec) {
 
   g.textAlign = 'center'; g.fillStyle = '#111';
   g.font = `bold 64px ${CERT_FONT}`; g.fillText('참 석 확 인 증', W / 2, 190);
-  g.font = `22px ${CERT_FONT}`; g.fillStyle = '#666'; g.fillText('접수번호  ' + rec.receiptNo, W / 2, 240, W - 160);
 
   const rows = [
     ['성      명', rec.name], ['소속기관', rec.org], ['과제번호', rec.projectNo],
     ['설 명 회', s.eventName], ['회      차', sessName(rec.session) || rec.session], ['일      시', info.date],
-    ['장      소', info.place], ['참석확인', rec.checkinAt],
+    ['장      소', info.place], ['참석확인', String(rec.checkinAt || '').slice(0, 10)],
   ].filter(([, v]) => v);
   g.textAlign = 'left'; g.font = `30px ${CERT_FONT}`;
   rows.forEach(([k, v], i) => {
@@ -1246,8 +1245,8 @@ async function sendCertMail() {
 // 신청자 휴대폰용 확인증 링크 (확인증 내용만 담음, 서명·직인 제외)
 function certLink(rec) {
   const s = state.settings, info = sessionInfo(rec.session);
-  const d = { n: rec.name, o: rec.org, p: rec.projectNo, r: rec.receiptNo, c: sessName(rec.session) || rec.session,
-              t: rec.checkinAt, y: fmtKo(new Date(rec.checkinISO)), e: s.eventName, d: info.date, l: info.place, i: s.issuer };
+  const d = { n: rec.name, o: rec.org, p: rec.projectNo, c: sessName(rec.session) || rec.session,
+              t: String(rec.checkinAt || '').slice(0, 10), y: fmtKo(new Date(rec.checkinISO)), e: s.eventName, d: info.date, l: info.place, i: s.issuer };
   Object.keys(d).forEach(k => { if (!d[k]) delete d[k]; });
   const bytes = new TextEncoder().encode(JSON.stringify(d));
   const b64 = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

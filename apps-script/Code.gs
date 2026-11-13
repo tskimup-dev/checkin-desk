@@ -12,7 +12,9 @@
  */
 const SHEET_ID = '여기에_스프레드시트_ID';   // 시트 주소 .../spreadsheets/d/【이 부분】/edit
 const API_KEY  = '여기에_비밀키';            // 영문·숫자를 섞어 16자 이상 권장
-const MAIL_FROM = 'info@rndhelp.co.kr';      // 확인증 메일 발신 주소 (아래 sendCert_ 설명 참고)
+const MAIL_FROM = 'info@rndhelp.co.kr';      // 확인증 메일 발신 주소 (아래 mailMode_ 설명 참고)
+const CERT_FILE = '[태성회계법인] 정산설명회_참석확인증_';   // 첨부파일 이름 앞부분 (뒤에 성명이 붙음)
+const SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdgElv5xupD6McmsHbCVGu5Qmn1u81wVzxgjryF2YlcQEeeRg/viewform';  // 만족도 조사 (비우면 안내 생략)
 
 // 각 탭: 사람이 읽는 열들 + [updatedAt, deleted, data(JSON 원본)]
 const TABLES = {
@@ -133,15 +135,23 @@ function sendCert_(b) {
   const h = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const m = String(b.img || '').match(/^data:image\/(png|jpeg);base64,(.+)$/);
   const attachments = m ? [Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1],
-    '참석확인증_' + String(b.name || '').replace(/[\\/:*?"<>|]/g, '') + (m[1] === 'png' ? '.png' : '.jpg'))] : [];
+    CERT_FILE + String(b.name || '').replace(/[\\/:*?"<>|]/g, '') + (m[1] === 'png' ? '.png' : '.jpg'))] : [];
   const when = [b.sessionName, b.date, b.place].filter(String).join(' · ');
+  const btn = (url, label, bg) => '<a href="' + h(url) + '" style="display:inline-block;padding:12px 22px;background:' + bg +
+      ';color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">' + label + '</a>';
   const htmlBody =
-      '<div style="font-family:Malgun Gothic,Apple SD Gothic Neo,sans-serif;font-size:15px;line-height:1.7;color:#16202c">' +
+      '<div style="font-family:Malgun Gothic,Apple SD Gothic Neo,sans-serif;font-size:15px;line-height:1.7;color:#16202c;max-width:560px">' +
       '<p><b>' + h(b.name) + '</b>님, <b>' + h(b.eventName) + '</b>에 참석해 주셔서 감사합니다.</p>' +
-      (when ? '<p style="color:#555">' + h(when) + '</p>' : '') +
-      '<p>참석 확인증을 첨부해 드립니다.' + (b.link ? ' 아래 버튼으로도 확인하실 수 있습니다.' : '') + '</p>' +
-      (b.link ? '<p><a href="' + h(b.link) + '" style="display:inline-block;padding:10px 18px;background:#1f5fbf;color:#fff;border-radius:8px;text-decoration:none">참석 확인증 보기</a></p>' : '') +
-      '<p style="color:#888;font-size:12px">문의: ' + h(MAIL_FROM) + ' · 접수번호 ' + h(b.receiptNo) + '</p></div>';
+      (when ? '<p style="color:#555;margin-top:-6px">' + h(when) + '</p>' : '') +
+      '<p>참석 확인증을 이 메일에 첨부해 드립니다.</p>' +
+      (SURVEY_URL ?
+        '<div style="margin:22px 0;padding:18px 20px;border:2px solid #1f5fbf;border-radius:12px;background:#f2f7ff">' +
+        '<p style="margin:0 0 6px;font-size:17px;font-weight:bold;color:#1f5fbf">📝 만족도 조사에 참여해 주세요</p>' +
+        '<p style="margin:0 0 14px">오늘 설명회는 어떠셨나요? 남겨 주신 의견은 다음 설명회를 더 알차게 준비하는 데 소중히 반영하겠습니다. ' +
+        '잠시만 시간을 내어 참여해 주시면 큰 힘이 됩니다.</p>' +
+        btn(SURVEY_URL, '만족도 조사 참여하기', '#1f5fbf') + '</div>' : '') +
+      (b.link ? '<p>첨부파일이 열리지 않으면 아래 버튼으로 확인증을 볼 수 있습니다.</p><p>' + btn(b.link, '참석 확인증 보기', '#5b6573') + '</p>' : '') +
+      '<p style="color:#888;font-size:12px;margin-top:24px">문의: ' + h(MAIL_FROM) + '</p></div>';
   const subject = '[' + (b.eventName || '설명회') + '] 참석 확인증';
   const name = b.sender || b.eventName || '설명회 접수데스크';
   if (mailMode_() === 'alias') {

@@ -48,12 +48,11 @@ function draw(d) {
 
   g.textAlign = 'center'; g.fillStyle = '#111';
   g.font = `bold 64px ${FONT}`; g.fillText('참 석 확 인 증', W / 2, 190);
-  if (d.r) { g.font = `22px ${FONT}`; g.fillStyle = '#666'; g.fillText('접수번호  ' + d.r, W / 2, 240, W - 160); }
 
   const rows = [
     ['성      명', d.n], ['소속기관', d.o], ['과제번호', d.p],
     ['설 명 회', d.e], ['회      차', d.c], ['일      시', d.d],
-    ['장      소', d.l], ['참석확인', d.t],
+    ['장      소', d.l], ['참석확인', String(d.t || '').slice(0, 10)],
   ].filter(([, v]) => v);
   g.textAlign = 'left'; g.font = `30px ${FONT}`;
   rows.forEach(([k, v], i) => {
