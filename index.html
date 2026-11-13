@@ -364,7 +364,7 @@
       <h2>처리 내역</h2>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>구분</th><th>성명</th><th>연구개발기관명</th><th>접수번호</th><th>신청 회차</th><th>참석 회차</th><th>결과</th><th>처리 시각</th><th>참석 여부</th></tr></thead>
+          <thead><tr><th>구분</th><th>접수번호</th><th>신청 회차</th><th>참석 회차</th><th>성명</th><th>연구개발기관명</th><th>결과</th><th>처리 시각</th><th>참석 여부</th></tr></thead>
           <tbody id="apDone"></tbody>
         </table>
       </div>
@@ -998,8 +998,9 @@ function renderApprovals() {
       : attended ? '<span class="pill ok">참석 완료</span>'
       : x.session === t ? `<button type="button" class="small primary" data-sign="${esc(x.receiptNo)}">서명 진행</button>`
       : '<span class="pill no">미참석</span>';
-    return `<tr><td class="nw">${kindPill(x)}</td><td class="nw">${esc(x.name)}</td><td class="org">${esc(x.org)}</td><td class="rno">${esc(x.receiptNo)}</td>
+    return `<tr><td class="nw">${kindPill(x)}</td><td class="rno">${esc(x.receiptNo)}</td>
       <td class="nw">${x.walkin ? '-' : esc(sessName(x.appliedSession) || '회차 미확인') + (x.waitlist ? ` (대기 ${esc(x.seq)}번)` : '')}</td><td class="nw">${esc(sessName(x.session))}</td>
+      <td class="nw">${esc(x.name)}</td><td class="org">${esc(x.org)}</td>
       <td class="nw">${x.status === 'approved' ? '<span class="pill ok">승인</span>' : '<span class="pill err">거절</span>'}</td>
       <td class="nw">${esc(x.decidedAt)}</td><td class="nw">${action}</td></tr>`;
   }).join('') : '<tr><td colspan="9" class="empty">처리 내역이 없습니다.</td></tr>';
