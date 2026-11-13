@@ -15,6 +15,10 @@
   #cert{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:300px}
   .btn{display:inline-block;margin-top:14px;padding:13px 22px;border-radius:10px;background:var(--primary);color:#fff;font-size:17px;font-weight:600;text-decoration:none;border:0}
   .muted{color:var(--muted);font-size:14px;margin:10px 0 0}
+  .survey{margin-top:22px;padding:18px 16px;border:2px solid var(--primary);border-radius:14px;background:#f2f7ff;text-align:center}
+  .survey h2{margin:0 0 6px;font-size:18px;color:var(--primary)}
+  .survey p{margin:0 0 12px;font-size:15px;color:var(--text)}
+  .survey .btn{margin-top:0;width:100%}
   .err{background:#fdecea;color:#b42318;border-radius:10px;padding:16px;text-align:left}
 </style>
 </head>
@@ -26,9 +30,17 @@
     <a id="save" class="btn" download="참석확인증.jpg">이미지로 저장</a>
     <p class="muted">저장 버튼이 안 되면 확인증 이미지를 <b>길게 눌러 '사진에 저장'</b> 하세요.</p>
   </div>
+  <div class="survey" id="survey">
+    <h2>📝 만족도 조사에 참여해 주세요</h2>
+    <p>오늘 설명회는 어떠셨나요? 남겨 주신 의견은 다음 설명회를 더 알차게 준비하는 데 소중히 반영하겠습니다.</p>
+    <a class="btn" id="surveyBtn" target="_blank" rel="noopener">만족도 조사 참여하기</a>
+  </div>
 </main>
 <script>
 /* 데스크에서 보여준 QR 안에 확인증 내용이 들어 있습니다. 서버나 명단에는 접근하지 않습니다. */
+const SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdgElv5xupD6McmsHbCVGu5Qmn1u81wVzxgjryF2YlcQEeeRg/viewform';  // 비우면 안내 숨김
+if (SURVEY_URL) document.getElementById('surveyBtn').href = SURVEY_URL;
+else document.getElementById('survey').remove();
 const FONT = '"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
 
 function decode(hash) {
