@@ -14,6 +14,7 @@ const SHEET_ID = '여기에_스프레드시트_ID';   // 시트 주소 .../sprea
 const API_KEY  = '여기에_비밀키';            // 영문·숫자를 섞어 16자 이상 권장
 const MAIL_FROM = 'info@rndhelp.co.kr';      // 확인증 메일 발신 주소 (아래 mailMode_ 설명 참고)
 const CERT_FILE = '[태성회계법인] 정산설명회_참석확인증_';   // 첨부파일 이름 앞부분 (뒤에 성명이 붙음)
+const FILES_URL = 'https://drive.google.com/drive/folders/1jbDeXL99D1Wpq-FiAb47JFeNAcXg9MVR';  // 설명회 자료 폴더 (비우면 안내 생략)
 const SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdgElv5xupD6McmsHbCVGu5Qmn1u81wVzxgjryF2YlcQEeeRg/viewform';  // 만족도 조사 (비우면 안내 생략)
 
 // 각 탭: 사람이 읽는 열들 + [updatedAt, deleted, data(JSON 원본)]
@@ -161,6 +162,11 @@ function sendCert_(b) {
         '<p style="margin:0 0 14px">오늘 설명회는 어떠셨나요? 남겨 주신 의견은 다음 설명회를 더 알차게 준비하는 데 소중히 반영하겠습니다. ' +
         '잠시만 시간을 내어 참여해 주시면 큰 힘이 됩니다.</p>' +
         btn(SURVEY_URL, '만족도 조사 참여하기', '#1f5fbf') + '</div>' : '') +
+      (FILES_URL ?
+        '<div style="margin:0 0 22px;padding:16px 20px;border:1px solid #d9dee5;border-radius:12px;background:#fff">' +
+        '<p style="margin:0 0 4px;font-size:16px;font-weight:bold">📂 설명회 자료</p>' +
+        '<p style="margin:0 0 12px;color:#555">오늘 설명회 발표 자료를 아래 버튼에서 받아 보실 수 있습니다.</p>' +
+        btn(FILES_URL, '설명회 자료 다운로드', '#0f7b5f') + '</div>' : '') +
       '<p style="color:#888;font-size:12px;margin-top:24px">문의: ' + h(MAIL_FROM) + '</p></div>';
   const subject = '[' + (b.eventName || '설명회') + '] 참석 확인증';
   const name = b.sender || b.eventName || '설명회 접수데스크';
