@@ -20,13 +20,15 @@ const TABLES = {
     cols: ['id', '회차', '접수번호', '성명', '기관', '과제번호', '휴대폰번호', '참석시각', '데스크', '구분'],
     idOf: r => r.id,
     row: r => [r.id, r.session, r.receiptNo, r.name, r.org, r.projectNo, r.phone, r.checkinAt, r.desk,
-               r.source === 'walkin' ? '현장 신청' : r.source === 'other' ? '타 회차 승인 (원래 신청: ' + (r.appliedSession || '미확인') + ')' : '사전 신청'],
+               r.source === 'walkin' ? '현장접수'
+                 : r.source === 'waitlist' ? '정원 외 (대기 ' + (r.seq || '?') + '번' + (r.appliedSession && r.appliedSession !== r.session ? ', 원래 신청: ' + r.appliedSession : '') + ')'
+                 : r.source === 'other' ? '정원 내 · 타 회차 승인 (원래 신청: ' + (r.appliedSession || '미확인') + ')' : '정원 내'],
   },
   approvals: {
     name: '승인',
     cols: ['id', '회차', '접수번호', '성명', '기관', '신청회차', '현장신청', '상태', '요청시각', '처리시각', '데스크'],
     idOf: r => r.id,
-    row: r => [r.id, r.session, r.receiptNo, r.name, r.org, r.appliedSession, r.walkin ? 'Y' : '',
+    row: r => [r.id, r.session, r.receiptNo, r.name, r.org, r.appliedSession, r.walkin ? 'Y' : r.waitlist ? '대기 ' + (r.seq || '') + '번' : '',
                r.status, r.requestedAt, r.decidedAt, r.desk],
   },
   walkins: {
@@ -59,7 +61,7 @@ function doGet(e) {
   const s = pullTable('settings', since)[0];
   if (s) o.settings = s;
   o.resetAt = getResetAt();
-  if (p.full === '1') o.applicants = readApplicants();
+  if (p.full === '1') { o.applicants = readApplicants(); o.waitlist = readWaitlist(); }
   return out(o);
 }
 
@@ -120,20 +122,27 @@ function doPost(e) {
 }
 
 /* ---------- 신청자 명단 읽기 ---------- */
-function readApplicants() {
+function readApplicants() { return readSignupTab_(false); }   // 정원 내 신청자 ('신청자' 탭)
+function readWaitlist()   { return readSignupTab_(true); }    // 정원 외 신청자 ('대기자' 탭)
+
+function readSignupTab_(wait) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
-  for (const sh of ss.getSheets()) {
-    if (OWN_TABS.indexOf(sh.getName()) >= 0) continue;
+  const prefer = wait ? '대기자' : '신청자';
+  const sheets = ss.getSheets().filter(sh => OWN_TABS.indexOf(sh.getName()) < 0)
+    .sort((a, b) => (b.getName() === prefer) - (a.getName() === prefer));   // 이름이 맞는 탭을 먼저 확인
+  for (const sh of sheets) {
     const range = sh.getDataRange();
     const values = range.getDisplayValues();
     const raw = range.getValues();               // 휴대폰번호는 화면 표시(1.10E+09 등)가 아닌 실제 값으로 읽음
     if (values.length < 1) continue;
     const H = values[0].map(h => String(h).replace(/\s/g, '').toLowerCase());
+    const isWait = H.some(h => h.indexOf('대기접수번호') >= 0);
+    if (isWait !== wait) continue;
     const col = keys => { for (const k of keys) { const i = H.findIndex(h => h.indexOf(k) >= 0); if (i >= 0) return i; } return -1; };
     const ix = {
-      receiptNo: col(['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
+      receiptNo: col(wait ? ['대기접수번호'] : ['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
       projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), specOrg: col(['전문기관']),
-      phone: col(['휴대폰', '핸드폰', '연락처', '전화']), status: col(['상태', 'status']),
+      phone: col(['휴대폰', '핸드폰', '연락처', '전화']), status: col(['상태', 'status']), seq: col(['발급순번', '대기순번', '순번']),
     };
     if (ix.receiptNo < 0 || ix.name < 0 || ix.status < 0) continue;
     const g = (r, k) => ix[k] >= 0 ? String(r[ix[k]] || '').trim() : '';
@@ -142,10 +151,12 @@ function readApplicants() {
       const v = raw[i][ix.phone];
       return typeof v === 'number' ? String(Math.round(v)) : String(v || '').trim();
     };
-    return values.slice(1).map((r, i) => ({
-      receiptNo: g(r, 'receiptNo'), name: g(r, 'name'), sessionText: g(r, 'sessionText'),
-      projectNo: g(r, 'projectNo'), org: g(r, 'org'), specOrg: g(r, 'specOrg'), phone: phoneOf(i + 1), status: g(r, 'status'),
-    })).filter(a => a.receiptNo);
+    return values.slice(1).map((r, i) => {
+      const a = { receiptNo: g(r, 'receiptNo'), name: g(r, 'name'), sessionText: g(r, 'sessionText'),
+        projectNo: g(r, 'projectNo'), org: g(r, 'org'), specOrg: g(r, 'specOrg'), phone: phoneOf(i + 1), status: g(r, 'status') };
+      if (wait) a.seq = g(r, 'seq');
+      return a;
+    }).filter(a => a.receiptNo);
   }
   return [];
 }
@@ -227,4 +238,6 @@ function testSetup() {
   Object.keys(TABLES).forEach(sheetOf);
   const list = readApplicants();
   Logger.log('명단 ' + list.length + '명, CONFIRMED ' + list.filter(a => a.status.toUpperCase() === 'CONFIRMED').length + '명');
+  const w = readWaitlist();
+  Logger.log('대기자 ' + w.length + '명, WAITING ' + w.filter(a => a.status.toUpperCase() === 'WAITING').length + '명');
 }

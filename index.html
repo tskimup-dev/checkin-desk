@@ -199,7 +199,7 @@
     <div id="hdrSub"></div>
   </div>
   <button type="button" id="sessPill" data-go="view-session" data-admin="회차를 변경합니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><b id="sessPillName">회차 선택</b><small>변경</small></button>
-  <div class="stats">참석 <b id="cntIn">0</b> · 미참석 <b id="cntOut">0</b> · 전체 <b id="cntAll">0</b></div>
+  <div class="stats">참석 <b id="cntIn">0</b> <small id="cntBrk" class="muted"></small> · 미참석 <b id="cntOut">0</b> · 전체 <b id="cntAll">0</b></div>
   <nav>
     <button type="button" data-go="view-lookup"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>접수</span></button>
     <button type="button" data-go="view-list" data-admin="참석자 명단을 엽니다."><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>참석자 명단</span></button>
@@ -326,6 +326,9 @@
           <button type="button" data-filter="in">참석 <span id="fIn">0</span></button>
           <button type="button" data-filter="out">미참석 <span id="fOut">0</span></button>
         </div>
+        <select id="listKind" style="width:auto">
+          <option value="all">구분 전체</option><option value="in">정원 내</option><option value="over">정원 외</option><option value="walkin">현장접수</option>
+        </select>
         <input id="listSearch" placeholder="이름·기관·과제번호·접수번호 검색">
       </div>
       <div class="table-wrap">
@@ -349,6 +352,7 @@
         <div class="tabs">
           <button type="button" data-apkind="all">전체</button>
           <button type="button" data-apkind="other">회차 변경</button>
+          <button type="button" data-apkind="over">정원 외(대기)</button>
           <button type="button" data-apkind="walkin">현장 신청</button>
         </div>
       </div>
@@ -552,6 +556,7 @@ const state = {
   attend: new Map(),      // id = 회차|접수번호
   approvals: new Map(),   // id = 회차|접수번호
   walkins: [],            // 현장 신청자
+  waitlist: [],           // 정원 외(대기자) 신청자 — 신청 시트의 '대기자' 탭
   outbox: [],             // 시트로 아직 못 보낸 작업
   lastSync: 0, lastFull: 0, lastResetAt: 0, syncState: '', syncErr: '', syncBusy: false,
   settings: { ...DEFAULT_SETTINGS },
@@ -611,21 +616,40 @@ function maskPhone(p) {
 }
 
 const statusOf = a => String(a.status || '').trim().toUpperCase();
-const isAllowed = a => statusOf(a) === 'CONFIRMED';            // CONFIRMED만 참석 가능
+// 참석 가능: 정원 내 신청자는 CONFIRMED, 정원 외(대기자)는 WAITING
+// (대기자 중 APPROVED는 이미 신청자 탭에 새 접수번호로 CONFIRMED 등록되어 있어 중복 제외)
+const isAllowed = a => a.waitlist ? statusOf(a) === 'WAITING' : statusOf(a) === 'CONFIRMED';
 const rosterBase = code => state.applicants.filter(a => isAllowed(a) && a.session === code);
 const attendFor = code => [...state.attend.values()].filter(r => r.session === code);
-const allApplicants = () => state.applicants.concat(state.walkins);
-// 회차별 인원: 총원 = CONFIRMED 사전 신청자 + 승인받아 참석한 타 회차·현장 신청자
+const allApplicants = () => state.applicants.concat(state.waitlist, state.walkins);
+// 참석자 3분류: in 정원 내 신청자 / over 정원 외 신청자(대기자) / walkin 현장접수자
+const CAT_LABEL = { in: '정원 내', over: '정원 외', walkin: '현장접수' };
+const CAT_PILL = { in: 'background:#eef0f3;color:#3b4552', over: 'background:#efe7fd;color:#5b21b6', walkin: 'background:#fff4d6;color:#8a5a00' };
+const catPill = c => `<span class="pill" style="${CAT_PILL[c]}">${CAT_LABEL[c]}</span>`;
+function catOf(r) {
+  const src = r.source || (r.rec && r.rec.source) || '';
+  const no = String((r.a && r.a.receiptNo) || r.receiptNo || '');
+  if (src === 'walkin' || no.startsWith('현장-')) return 'walkin';
+  if (src === 'waitlist' || /^WAIT_/i.test(no)) return 'over';
+  return 'in';
+}
+// 회차별 인원: 전체 = 정원 내 신청자(CONFIRMED) + 참석한 정원 외·현장접수·타 회차 승인자
 function counts(code) {
-  if (!code) return { in: 0, out: 0, all: 0 };
-  const r = buildRoster(code), n = r.filter(x => x.rec).length;
-  return { in: n, out: r.length - n, all: r.length };
+  const z = { in: 0, out: 0, all: 0, cin: 0, cover: 0, cwalk: 0 };
+  if (!code) return z;
+  const r = buildRoster(code), att = r.filter(x => x.rec);
+  return { in: att.length, out: r.length - att.length, all: r.length,
+           cin: att.filter(x => catOf(x) === 'in').length, cover: att.filter(x => catOf(x) === 'over').length,
+           cwalk: att.filter(x => catOf(x) === 'walkin').length };
 }
 const findApplicant = no => allApplicants().find(a => a.receiptNo === no);
-// 참석자 명단 행의 구분: 현장 신청 / 타 회차 승인 (r.walkin은 '명단 밖 추가 행'이라는 뜻이라 구분에 쓰지 않음)
-const isWalkinRow = r => r.source === 'walkin' || (r.rec && r.rec.source === 'walkin') || String((r.a && r.a.receiptNo) || r.receiptNo || '').startsWith('현장-');
-const sourceLabel = r => isWalkinRow(r) ? '현장 신청'
-  : `타 회차 승인 (원래 신청: ${sessName(r.a ? r.a.session : r.appliedSession) || '회차 미확인'})`;
+// 비고: 정원 외는 대기 순번(다른 회차면 원래 회차), 정원 내 추가 행은 타 회차 승인
+function sourceLabel(r) {
+  const c = catOf(r), a = r.a || r, sess = a.session || r.appliedSession, seq = a.seq || (r.rec && r.rec.seq) || r.seq;
+  if (c === 'walkin') return '현장 신청';
+  if (c === 'over') return `대기 ${seq || '?'}번${sess && sess !== r.sess ? ` (원래 신청: ${sessName(sess)})` : ''}`;
+  return `타 회차 승인 (원래 신청: ${sessName(sess) || '회차 미확인'})`;
+}
 
 function beep(ok = true) {
   try {
@@ -713,6 +737,7 @@ function refreshHeader() {
   $('#lookupSess').textContent = t ? `현재 회차 · ${sessLabel(t)}` : '회차가 선택되지 않았습니다';
   const c = counts(t);
   $('#cntIn').textContent = c.in; $('#cntOut').textContent = c.out; $('#cntAll').textContent = c.all;
+  $('#cntBrk').textContent = c.in ? `(정원 내 ${c.cin} · 정원 외 ${c.cover} · 현장 ${c.cwalk})` : '';
   const pending = [...state.approvals.values()].filter(x => x.status === 'pending').length;
   $('#apBadge').textContent = pending || ''; $('#apBadge').dataset.n = pending;
   document.title = `${t ? sessName(t) + ' - ' : ''}${s.eventName || '접수데스크'}`;
@@ -782,7 +807,7 @@ function handleQuery(raw) {
     matches.map(a => `
       <div class="choice">
         <div><b>${esc(a.name)}</b> · ${esc(a.org)}<br>
-          <span class="muted" style="font-size:14px">${esc(a.receiptNo)} · ${a.walkin ? '현장 신청' : esc(sessLabel(a.session))}${!a.walkin && a.session !== t ? ' · 타 회차' : ''}${state.attend.has(key(t, a.receiptNo)) ? ' · 참석완료' : ''}</span></div>
+          <span class="muted" style="font-size:14px">${esc(a.receiptNo)} · ${a.walkin ? '현장 신청' : esc(sessLabel(a.session))}${a.waitlist ? ` · 정원 외(대기 ${esc(a.seq)}번)` : ''}${!a.walkin && a.session !== t ? ' · 타 회차' : ''}${state.attend.has(key(t, a.receiptNo)) ? ' · 참석완료' : ''}</span></div>
         <button type="button" class="small" data-open="${esc(a.receiptNo)}">선택</button>
       </div>`).join(''), 'warn');
 }
@@ -801,19 +826,24 @@ function openApplicant(a) {
       <div class="btns"><button type="button" class="small" data-cert="${esc(id)}">확인증 다시 보기</button></div>`, 'warn');
   }
 
-  if (a.walkin || a.session !== t) {                   // 현장 신청자·다른 회차 신청자 → 관리자 승인 필요
+  if (a.walkin || a.waitlist || a.session !== t) {    // 현장 신청자·정원 외(대기자)·다른 회차 신청자 → 관리자 승인 필요
     const ap = state.approvals.get(id);
     if (ap && ap.status === 'approved') return openConfirm(a, true);
     beep(false);
     go('view-lookup');
     const applied = a.walkin ? '<b>현장 신청자</b>입니다'
+      : a.waitlist ? `<b>${esc(sessLabel(a.session))}</b> <b>정원 외(대기 ${esc(a.seq)}번)</b> 신청자입니다`
       : a.session ? `<b>${esc(sessLabel(a.session))}</b> 신청자입니다` : '신청 회차를 확인할 수 없습니다';
+    const why = a.waitlist && a.session === t ? '대기 신청은 참석 확정이 아니어서, 잔여석 확인 후 <b>관리자 승인</b>이 필요합니다.'
+      : `현재 회차(<b>${esc(sessLabel(t))}</b>)에 참석하려면 <b>관리자 승인</b>이 필요합니다.`;
+    const btnText = a.walkin ? '관리자에게 참석 승인 요청 등록하기'
+      : a.waitlist && a.session === t ? '관리자에게 참석 승인 요청하기' : '관리자에게 참석 일정 변경 승인 요청하기';
     let status = '';
     if (ap && ap.status === 'pending') status = `<div style="margin-top:6px">⏳ 승인 요청됨 (${esc(ap.requestedAt)}) · 관리자 확인 대기 중</div>`;
     if (ap && ap.status === 'rejected') status = `<div style="margin-top:6px">✕ 이전 요청이 거절되었습니다 (${esc(ap.decidedAt)})</div>`;
     return lookupMsg(`<b>${esc(a.name)}</b>님(${esc(a.org)})은 ${applied}.<br>
-      현재 회차(<b>${esc(sessLabel(t))}</b>)에 참석하려면 <b>관리자 승인</b>이 필요합니다.${status}
-      ${!ap || ap.status === 'rejected' ? `<div class="btns"><button type="button" class="small primary" data-req="${esc(a.receiptNo)}">${a.walkin ? '관리자에게 참석 승인 요청 등록하기' : '관리자에게 참석 일정 변경 승인 요청하기'}</button></div>` : ''}`, 'warn');
+      ${why}${status}
+      ${!ap || ap.status === 'rejected' ? `<div class="btns"><button type="button" class="small primary" data-req="${esc(a.receiptNo)}">${btnText}</button></div>` : ''}`, 'warn');
   }
   beep(true);
   openConfirm(a, false);
@@ -827,13 +857,14 @@ function openConfirm(a, approved) {
     <dl class="kv">
       <dt>접수번호</dt><dd>${esc(a.receiptNo)}</dd>
       <dt>참석 회차</dt><dd>${esc(sessLabel(t))}</dd>
-      ${a.walkin ? '<dt>구분</dt><dd>현장 신청</dd>' : approved ? `<dt>신청 회차</dt><dd>${esc(sessLabel(a.session))}</dd>` : ''}
+      <dt>구분</dt><dd>${a.walkin ? '현장접수' : a.waitlist ? `정원 외 (대기 ${esc(a.seq)}번)` : '정원 내'}</dd>
+      ${!a.walkin && a.session !== t ? `<dt>신청 회차</dt><dd>${esc(sessLabel(a.session))}</dd>` : ''}
       ${a.specOrg ? `<dt>전문기관</dt><dd>${esc(a.specOrg)}</dd>` : ''}
       ${a.projectNo ? `<dt>과제번호</dt><dd>${esc(a.projectNo)}</dd>` : ''}
       ${a.phone ? `<dt>휴대폰번호</dt><dd>${esc(maskPhone(a.phone))}</dd>` : ''}
     </dl>`;
   $('#confirmWarn').innerHTML = !approved ? ''
-    : `<div class="msg ok">관리자 승인으로 ${a.walkin ? '현장 신청자' : '다른 회차 신청자'}의 참석을 확인합니다.</div>`;
+    : `<div class="msg ok">관리자 승인으로 ${a.walkin ? '현장 신청자' : a.waitlist ? '정원 외(대기) 신청자' : '다른 회차 신청자'}의 참석을 확인합니다.</div>`;
   $('#confirmMsg').innerHTML = '';
   go('view-confirm');
   requestAnimationFrame(sizeSig);
@@ -871,7 +902,7 @@ async function submitWalkin() {
 
   const p = normPhone(phone);
   // 이미 사전 신청(CONFIRMED)한 사람이면 일반 조회로 안내
-  if (state.applicants.some(a => isAllowed(a) && normPhone(a.phone) === p)) {
+  if (state.applicants.concat(state.waitlist).some(a => isAllowed(a) && normPhone(a.phone) === p)) {   // 정원 내·정원 외 신청 내역이 있으면 그쪽으로
     go('view-lookup');
     $('#q').value = p;
     lookupMsg('이미 사전 신청 내역이 있습니다. 아래에서 확인해 주세요.', 'warn');
@@ -900,7 +931,8 @@ function newApproval(a) {
   const now = new Date();
   return {
     id: key(today(), a.receiptNo), session: today(), receiptNo: a.receiptNo,
-    name: a.name, org: a.org, appliedSession: a.walkin ? '' : a.session, walkin: !!a.walkin, status: 'pending',
+    name: a.name, org: a.org, appliedSession: a.walkin ? '' : a.session, walkin: !!a.walkin,
+    waitlist: !!a.waitlist, seq: a.seq || '', status: 'pending',
     requestedAt: fmt(now), requestedISO: now.toISOString(), decidedAt: '', desk: state.settings.desk || '',
   };
 }
@@ -935,7 +967,7 @@ function renderApprovals() {
   $('#apFilter').value = state.apFilter;
   document.querySelectorAll('[data-apkind]').forEach(b => b.classList.toggle('active', b.dataset.apkind === state.apKind));
 
-  const kindOf = x => x.walkin ? 'walkin' : 'other';
+  const kindOf = x => x.walkin ? 'walkin' : x.waitlist ? 'over' : 'other';
   const list = [...state.approvals.values()]
     .filter(x => state.apFilter === 'ALL' || x.session === state.apFilter)
     .filter(x => state.apKind === 'all' || kindOf(x) === state.apKind)
@@ -944,8 +976,10 @@ function renderApprovals() {
   const done = list.filter(x => x.status !== 'pending');
   $('#apPendN').textContent = pend.length || ''; $('#apPendN').dataset.n = pend.length;
 
-  const kindPill = x => x.walkin ? '<span class="pill warn">현장 신청</span>' : '<span class="pill" style="background:var(--primary-bg);color:var(--primary)">회차 변경</span>';
+  const kindPill = x => x.walkin ? catPill('walkin') : x.waitlist ? catPill('over')
+    : '<span class="pill" style="background:var(--primary-bg);color:var(--primary)">회차 변경</span>';
   const route = x => x.walkin ? `현장 신청 → <b>${esc(sessName(x.session))}</b>`
+    : x.waitlist ? `<b>${esc(sessName(x.appliedSession))}</b> 대기 <b>${esc(x.seq)}번</b> → <b>${esc(sessName(x.session))}</b> 참석`
     : `<b>${esc(sessName(x.appliedSession) || '회차 미확인')}</b> 신청 → <b>${esc(sessName(x.session))}</b> 참석`;
 
   $('#apPending').innerHTML = pend.length ? pend.map(x => `
@@ -965,7 +999,7 @@ function renderApprovals() {
       : x.session === t ? `<button type="button" class="small primary" data-sign="${esc(x.receiptNo)}">서명 진행</button>`
       : '<span class="pill no">미참석</span>';
     return `<tr><td class="nw">${kindPill(x)}</td><td class="nw">${esc(x.name)}</td><td class="org">${esc(x.org)}</td><td class="rno">${esc(x.receiptNo)}</td>
-      <td class="nw">${x.walkin ? '-' : esc(sessName(x.appliedSession) || '회차 미확인')}</td><td class="nw">${esc(sessName(x.session))}</td>
+      <td class="nw">${x.walkin ? '-' : esc(sessName(x.appliedSession) || '회차 미확인') + (x.waitlist ? ` (대기 ${esc(x.seq)}번)` : '')}</td><td class="nw">${esc(sessName(x.session))}</td>
       <td class="nw">${x.status === 'approved' ? '<span class="pill ok">승인</span>' : '<span class="pill err">거절</span>'}</td>
       <td class="nw">${esc(x.decidedAt)}</td><td class="nw">${action}</td></tr>`;
   }).join('') : '<tr><td colspan="9" class="empty">처리 내역이 없습니다.</td></tr>';
@@ -1025,7 +1059,8 @@ async function submitCheckin() {
   const now = new Date();
   const rec = {
     id: key(t, a.receiptNo), session: t, appliedSession: a.walkin ? '' : a.session, approved: !!cur.approved,
-    source: a.walkin ? 'walkin' : (cur.approved ? 'other' : ''),
+    source: a.walkin ? 'walkin' : a.waitlist ? 'waitlist' : (cur.approved ? 'other' : ''),
+    seq: a.seq || '',
     receiptNo: a.receiptNo, name: a.name, org: a.org, specOrg: a.specOrg || '', projectNo: a.projectNo, phone: a.phone,
     checkinAt: fmt(now), checkinISO: now.toISOString(),
     desk: state.settings.desk || '', sig: sigDataUrl(),
@@ -1158,7 +1193,7 @@ function buildRoster(code) {
   const extra = attendFor(code).filter(r => !inBase.has(r.receiptNo))
     .sort((x, y) => x.checkinISO.localeCompare(y.checkinISO))
     .map(r => ({
-      a: { receiptNo: r.receiptNo, name: r.name, org: r.org, specOrg: r.specOrg, projectNo: r.projectNo, phone: r.phone, session: r.appliedSession },
+      a: { receiptNo: r.receiptNo, name: r.name, org: r.org, specOrg: r.specOrg, projectNo: r.projectNo, phone: r.phone, session: r.appliedSession, seq: r.seq },
       rec: r, walkin: true, source: r.source,
     }));
   return base.concat(extra).map(r => ({ ...r, sess: code }));
@@ -1169,9 +1204,10 @@ function renderList() {
   const isAll = code === 'ALL';
   $('#listSession').innerHTML = `<option value="ALL" ${isAll ? 'selected' : ''}>전체 회차 (통합)</option>` + SESSIONS.map(s =>
     `<option value="${s.code}" ${s.code === code ? 'selected' : ''}>${esc(s.name)} (${s.code})${s.code === today() ? ' · 현재' : ''}</option>`).join('');
-  $('#listHead').innerHTML = `<tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>성명</th><th>연구개발기관명</th><th>과제번호</th><th>전문기관</th><th>접수번호</th><th>참석</th><th>서명</th><th>비고</th><th></th></tr>`;
+  $('#listHead').innerHTML = `<tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>구분</th><th>성명</th><th>연구개발기관명</th><th>과제번호</th><th>전문기관</th><th>접수번호</th><th>참석</th><th>서명</th><th>비고</th><th></th></tr>`;
 
-  const all = buildRoster(code);
+  const kind = $('#listKind').value || 'all';
+  const all = buildRoster(code).filter(r => kind === 'all' || catOf(r) === kind);
   const nIn = all.filter(r => r.rec).length;
   $('#fAll').textContent = all.length; $('#fIn').textContent = nIn; $('#fOut').textContent = all.length - nIn;
   document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === state.listFilter));
@@ -1182,18 +1218,19 @@ function renderList() {
     .filter(r => !q || [r.a.name, r.a.org, r.a.specOrg, r.a.receiptNo, r.a.projectNo].some(v => String(v || '').toLowerCase().includes(q)));
 
   $('#listBody').innerHTML = rows.length ? rows.map(r => {
-    const note = !r.walkin ? '' : isWalkinRow(r) ? '<span class="pill warn">현장 신청</span>'
+    const c = catOf(r);
+    const note = !r.walkin || c === 'walkin' ? '' : c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>`
       : `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>`;
     let action = '';
     if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
                          <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
     else if (r.sess === today()) action = `<button type="button" class="small" data-open-admin="${esc(r.a.receiptNo)}">접수 처리</button>`;
     return `<tr class="${r.rec ? '' : 'absent'}">
-      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="pno">${esc(r.a.projectNo)}</td><td class="org">${esc(r.a.specOrg || '')}</td><td class="rno">${esc(r.a.receiptNo)}</td>
+      <td class="nw">${r.no}</td>${isAll ? `<td class="nw">${esc(sessName(r.sess))}</td>` : ''}<td class="nw">${catPill(c)}</td><td class="nw"><b>${esc(r.a.name)}</b></td><td class="org">${esc(r.a.org)}</td><td class="pno">${esc(r.a.projectNo)}</td><td class="org">${esc(r.a.specOrg || '')}</td><td class="rno">${esc(r.a.receiptNo)}</td>
       <td class="nw">${r.rec ? `<span class="pill ok">참석</span> ${esc(r.rec.checkinAt.slice(11))}` : '<span class="pill no">미참석</span>'}</td>
       <td class="sig">${r.rec ? `<img src="${r.rec.sig}" alt="서명">` : ''}</td>
       <td>${note}</td><td class="nw">${action}</td></tr>`;
-  }).join('') : `<tr><td colspan="${isAll ? 11 : 10}" class="empty">${all.length ? '조건에 맞는 사람이 없습니다.' : '이 회차의 CONFIRMED 신청자가 없습니다.'}</td></tr>`;
+  }).join('') : `<tr><td colspan="${isAll ? 12 : 11}" class="empty">${all.length ? '조건에 맞는 사람이 없습니다.' : '해당하는 사람이 없습니다.'}</td></tr>`;
 }
 
 function exportCsv() {
@@ -1201,8 +1238,8 @@ function exportCsv() {
   const all = buildRoster(code);
   if (!all.length) return alert('이 회차의 명단이 없습니다.');
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
-  const head = ['No', '참석 회차', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
-  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), r.a.receiptNo, isWalkinRow(r) ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.specOrg || '', r.a.projectNo,
+  const head = ['No', '참석 회차', '구분', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
+  const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), CAT_LABEL[catOf(r)], r.a.receiptNo, catOf(r) === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name, r.a.org, r.a.specOrg || '', r.a.projectNo,
     normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.walkin ? sourceLabel(r) + ' · 관리자 승인' : '', r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
@@ -1216,7 +1253,7 @@ function exportRoster() {
   const s = state.settings, info = isAll ? {} : sessionInfo(code);
   const nIn = all.filter(r => r.rec).length;
   const rows = all.map((r, i) => `
-    <tr><td>${i + 1}</td>${isAll ? `<td>${esc(sessName(r.sess))}</td>` : ''}<td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.specOrg || '')}</td><td>${esc(r.a.receiptNo)}</td>
+    <tr><td>${i + 1}</td>${isAll ? `<td>${esc(sessName(r.sess))}</td>` : ''}<td>${CAT_LABEL[catOf(r)]}</td><td>${esc(r.a.name)}</td><td>${esc(r.a.org)}</td><td>${esc(r.a.projectNo)}</td><td>${esc(r.a.specOrg || '')}</td><td>${esc(r.a.receiptNo)}</td>
       <td>${r.rec ? esc(r.rec.checkinAt.slice(11)) : ''}</td><td class="sig">${r.rec ? `<img src="${r.rec.sig}">` : ''}</td>
       <td>${r.walkin ? sourceLabel(r) : ''}</td></tr>`).join('');
   const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>서명 참석자 명단 - ${esc(isAll ? '전체 회차' : sessName(code))}</title>
@@ -1225,8 +1262,8 @@ p{margin:0 0 16px;color:#555}table{width:100%;border-collapse:collapse;font-size
 th,td{border:1px solid #999;padding:4px 6px;text-align:center}th{background:#eee}
 td.sig{width:140px;height:46px;padding:2px}td.sig img{height:40px}tr{page-break-inside:avoid}</style></head><body>
 <h1>${esc(s.eventName)} · ${esc(isAll ? '전체 회차' : sessLabel(code))} 참석자 서명부</h1>
-<p>${esc([info.date, info.place].filter(Boolean).join(' · '))} · 대상 ${all.length}명 · 참석 ${nIn}명 · 미참석 ${all.length - nIn}명 · 출력 ${esc(fmt(new Date()))}</p>
-<table><thead><tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>성명</th><th>연구개발기관명</th><th>과제번호</th><th>전문기관</th><th>접수번호</th><th>참석시각</th><th>서명</th><th>비고</th></tr></thead>
+<p>${esc([info.date, info.place].filter(Boolean).join(' · '))} · 전체 ${all.length}명 · 참석 ${nIn}명 (정원 내 ${all.filter(r => r.rec && catOf(r) === 'in').length} · 정원 외 ${all.filter(r => r.rec && catOf(r) === 'over').length} · 현장접수 ${all.filter(r => r.rec && catOf(r) === 'walkin').length}) · 미참석 ${all.length - nIn}명 · 출력 ${esc(fmt(new Date()))}</p>
+<table><thead><tr><th>No</th>${isAll ? '<th>회차</th>' : ''}<th>구분</th><th>성명</th><th>연구개발기관명</th><th>과제번호</th><th>전문기관</th><th>접수번호</th><th>참석시각</th><th>서명</th><th>비고</th></tr></thead>
 <tbody>${rows}</tbody></table></body></html>`;
   download(`서명참석자명단_${isAll ? '전체회차' : sessName(code) || code}_${fileStamp()}.html`, html, 'text/html;charset=utf-8');
 }
@@ -1310,10 +1347,11 @@ function mapApplicants(rows) {
   if (hi < 0) throw new Error('"접수번호" 열이 있는 머리글 행을 찾을 수 없습니다.');
   const H = rows[hi].map(c => c.replace(/\s/g, '').toLowerCase());
   const col = keys => { for (const k of keys) { const i = H.findIndex(h => h.includes(k)); if (i >= 0) return i; } return -1; };
+  const isWait = H.some(h => h.includes('대기접수번호'));    // 신청 시트의 '대기자' 탭
   const ix = {
-    receiptNo: col(['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
+    receiptNo: col(isWait ? ['대기접수번호'] : ['접수번호']), name: col(['성명', '이름']), sessionText: col(['회차id', '회차']),
     projectNo: col(['과제번호']), org: col(['연구개발기관', '소속기관', '기관']), specOrg: col(['전문기관']), phone: col(['휴대폰', '핸드폰', '연락처', '전화']),
-    status: col(['상태', 'status']),
+    status: col(['상태', 'status']), seq: col(['발급순번', '대기순번', '순번']),
   };
   if (ix.name < 0) throw new Error('"성명" 열을 찾을 수 없습니다.');
   if (ix.status < 0) throw new Error('"상태(status)" 열을 찾을 수 없습니다. CONFIRMED 여부를 확인하려면 이 열이 필요합니다.');
@@ -1322,6 +1360,7 @@ function mapApplicants(rows) {
     const a = { receiptNo: g('receiptNo'), name: g('name'), sessionText: g('sessionText'),
                 projectNo: g('projectNo'), org: g('org'), specOrg: g('specOrg'), phone: g('phone'), status: g('status') };
     a.session = detectSession(a.receiptNo, a.sessionText);
+    if (isWait) { a.waitlist = true; a.seq = g('seq'); }
     return a;
   }).filter(a => a.receiptNo);
 }
@@ -1345,6 +1384,12 @@ function showImportInfo() {
   $('#importInfo').innerHTML = `<div class="msg ${ok.length ? 'ok' : 'err'}">
       현재 명단: 전체 <b>${n}명</b> 중 <b>CONFIRMED ${ok.length}명</b>${otherText ? ` · 참석 불가: ${otherText}` : ''}<br>회차별: ${perSess}</div>` +
     (sciPhone ? `<div class="msg err">휴대폰번호 ${sciPhone}건이 <b>1.10E+09</b> 같은 지수 표기로 들어와 휴대폰번호로 조회할 수 없습니다. 구글 시트에서 휴대폰번호 열을 선택하고 <b>서식 → 숫자 → 일반 텍스트</b>로 바꾼 뒤 다시 내려받아 주세요.</div>` : '') +
+    (() => {
+      const w = state.waitlist.filter(isAllowed);
+      return `<div class="msg ${state.waitlist.length ? 'ok' : 'warn'}">정원 외(대기자) 명단: ${state.waitlist.length
+        ? `전체 <b>${state.waitlist.length}명</b> 중 <b>WAITING ${w.length}명</b> · 회차별: ${SESSIONS.map(s => `${esc(s.name)} ${w.filter(a => a.session === s.code).length}명`).join(' · ')}`
+        : '불러오지 않았습니다. 신청 시트의 <b>대기자</b> 탭도 같은 방법으로 붙여넣으세요.'}</div>`;
+    })() +
     (unknown ? `<div class="msg warn">회차를 알 수 없는 CONFIRMED 신청자 ${unknown}명 — 접수번호에 S001~S004가 없고 회차 열로도 구분되지 않습니다. 이 사람들은 관리자 승인 후에만 접수됩니다.</div>` : '');
 }
 
@@ -1359,8 +1404,13 @@ async function importApplicants() {
   const seen = new Set(), dup = [];
   list.forEach(a => { if (seen.has(a.receiptNo)) dup.push(a.receiptNo); seen.add(a.receiptNo); });
 
-  state.applicants = list;
-  await DB.set('applicants', list).catch(() => alert('명단 저장에 실패했습니다. 새로고침하면 다시 불러와야 합니다.'));
+  if (list[0].waitlist) {                            // 대기자 탭을 붙여넣은 경우 → 정원 외 명단으로 저장
+    state.waitlist = list;
+    await DB.set('waitlist', list).catch(() => {});
+  } else {
+    state.applicants = list;
+    await DB.set('applicants', list).catch(() => alert('명단 저장에 실패했습니다. 새로고침하면 다시 불러와야 합니다.'));
+  }
   $('#pasteBox').value = ''; $('#csvFile').value = '';
   showImportInfo();
   if (dup.length) $('#importInfo').innerHTML += `<div class="msg warn">중복 접수번호 ${dup.length}건: ${esc(dup.slice(0, 5).join(', '))}${dup.length > 5 ? ' …' : ''}</div>`;
@@ -1370,8 +1420,8 @@ async function importApplicants() {
 async function clearApplicants() {
   if (!confirm('불러온 신청자 명단을 이 기기에서 삭제합니다. (참석 기록은 유지됩니다)')) return;
   if (!await askPin('명단을 삭제하려면 관리자 비밀번호를 입력하세요.', true)) return;
-  state.applicants = [];
-  await DB.del('applicants').catch(() => {});
+  state.applicants = []; state.waitlist = [];
+  await DB.del('applicants').catch(() => {}); await DB.del('waitlist').catch(() => {});
   showImportInfo(); refreshHeader();
 }
 
@@ -1457,6 +1507,7 @@ $('#btnNext').addEventListener('click', () => { $('#q').value = ''; lookupMsg(''
 $('#apFilter').addEventListener('change', e => { state.apFilter = e.target.value; renderApprovals(); });
 $('#listSession').addEventListener('change', e => { state.listSession = e.target.value; renderList(); });
 $('#listSearch').addEventListener('input', renderList);
+$('#listKind').addEventListener('change', renderList);
 $('#btnCsv').addEventListener('click', exportCsv);
 $('#btnRoster').addEventListener('click', exportRoster);
 $('#btnReset').addEventListener('click', resetAll);
@@ -1583,6 +1634,10 @@ async function pull(fromZero, withApplicants) {
     SHARED_KEYS.forEach(k => { if (r.settings[k] !== undefined) state.settings[k] = r.settings[k]; });
     applyDefaults(state.settings);
     await saveSettingsDb();
+  }
+  if (r.waitlist) {
+    state.waitlist = r.waitlist.map(a => ({ ...a, waitlist: true, session: detectSession(a.receiptNo, a.sessionText) }));
+    await DB.set('waitlist', state.waitlist).catch(() => {});
   }
   if (r.applicants) {
     state.applicants = r.applicants.map(a => ({ ...a, session: detectSession(a.receiptNo, a.sessionText) }));
@@ -1801,6 +1856,7 @@ window.addEventListener('resize', () => {
   ((await DB.all('attend').catch(() => [])) || []).forEach(r => state.attend.set(r.id, r));
   ((await DB.all('approvals').catch(() => [])) || []).forEach(r => state.approvals.set(r.id, r));
   state.walkins = (await DB.get('walkins').catch(() => null)) || [];
+  state.waitlist = (await DB.get('waitlist').catch(() => null)) || [];
   state.outbox = (await DB.get('outbox').catch(() => null)) || [];
   state.lastSync = (await DB.get('lastSync').catch(() => null)) || 0;
   state.lastResetAt = (await DB.get('lastResetAt').catch(() => null)) || 0;
