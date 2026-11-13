@@ -21,7 +21,7 @@ const TABLES = {
     idOf: r => r.id,
     row: r => [r.id, r.session, r.receiptNo, r.name, r.org, r.projectNo, r.phone, r.checkinAt, r.desk,
                r.source === 'walkin' ? '현장접수'
-                 : r.source === 'waitlist' ? '정원 외 (대기 ' + (r.seq || '?') + '번' + (r.appliedSession && r.appliedSession !== r.session ? ', 원래 신청: ' + r.appliedSession : '') + ')'
+                 : r.source === 'waitlist' ? '신청대기 (' + (r.seq || '?') + '번' + (r.appliedSession && r.appliedSession !== r.session ? ', 원래 신청: ' + r.appliedSession : '') + ')'
                  : r.source === 'other' ? '정원 내 · 타 회차 승인 (원래 신청: ' + (r.appliedSession || '미확인') + ')' : '정원 내'],
   },
   approvals: {
@@ -123,7 +123,7 @@ function doPost(e) {
 
 /* ---------- 신청자 명단 읽기 ---------- */
 function readApplicants() { return readSignupTab_(false); }   // 정원 내 신청자 ('신청자' 탭)
-function readWaitlist()   { return readSignupTab_(true); }    // 정원 외 신청자 ('대기자' 탭)
+function readWaitlist()   { return readSignupTab_(true); }    // 신청대기자 ('대기자' 탭)
 
 function readSignupTab_(wait) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
