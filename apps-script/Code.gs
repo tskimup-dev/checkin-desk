@@ -153,6 +153,7 @@ function sendCert_(b) {
       ';color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">' + label + '</a>';
   const htmlBody =
       '<div style="font-family:Malgun Gothic,Apple SD Gothic Neo,sans-serif;font-size:15px;line-height:1.7;color:#16202c;max-width:560px">' +
+      (MAIL_FROM ? '<p style="margin:0 0 16px;color:#d32f2f;font-size:18pt;font-weight:bold">문의 : ' + h(MAIL_FROM) + '</p>' : '') +
       '<p><b>' + h(b.name) + '</b>님, <b>' + h(b.eventName) + '</b>에 참석해 주셔서 감사합니다.</p>' +
       (when ? '<p style="color:#555;margin-top:-6px">' + h(when) + '</p>' : '') +
       '<p>참석 확인증을 이 메일에 첨부해 드립니다.</p>' +
@@ -167,7 +168,7 @@ function sendCert_(b) {
         '<p style="margin:0 0 4px;font-size:16px;font-weight:bold">📂 설명회 자료</p>' +
         '<p style="margin:0 0 12px;color:#555">오늘 설명회 발표 자료를 아래 버튼에서 받아 보실 수 있습니다.</p>' +
         btn(FILES_URL, '설명회 자료 다운로드', '#0f7b5f') + '</div>' : '') +
-      '<p style="color:#888;font-size:12px;margin-top:24px">문의: ' + h(MAIL_FROM) + '</p></div>';
+      '</div>';
   const subject = '[' + (b.eventName || '설명회') + '] 참석 확인증';
   const name = b.sender || b.eventName || '설명회 접수데스크';
   if (mailMode_() === 'alias') {
