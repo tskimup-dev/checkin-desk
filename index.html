@@ -358,6 +358,7 @@
           <button type="button" data-filter="all">전체 <span id="fAll">0</span></button>
           <button type="button" data-filter="in">참석 <span id="fIn">0</span></button>
           <button type="button" data-filter="out">미참석 <span id="fOut">0</span></button>
+          <button type="button" data-filter="mail">이메일 희망 <span id="fMail">0</span></button>
         </div>
         <select id="listKind" style="width:auto">
           <option value="all">구분 전체</option><option value="in">정원 내</option><option value="over">신청대기</option><option value="walkin">현장접수</option>
@@ -373,6 +374,7 @@
       <div class="actions">
         <button type="button" id="btnCsv">참석자 명단 CSV 저장</button>
         <button type="button" id="btnRoster">서명 참석자 명단 저장</button>
+        <button type="button" id="btnMailCsv">이메일 희망자 명단 저장</button>
       </div>
     </div>
   </section>
@@ -1233,66 +1235,44 @@ function certEmailOf(rec) {
   const a = findApplicant(rec.receiptNo);
   return (rec.email || (a && a.email) || '').trim();
 }
+// 이메일로 받기 = 신청만 받아 두고, 행사 종료 후 관리자가 한꺼번에 발송 (메일 한도 때문)
 function renderCertMail(rec) {
   const box = $('#certMail'), to = certEmailOf(rec);
   state.mailRec = rec;
   $('#certMailMsg').innerHTML = '';
-  if (!syncOn()) return box.classList.add('hidden');           // 메일은 구글 시트 연동(Apps Script)으로 보냄
   box.classList.remove('hidden');
-  const btn = $('#btnMail');
-  const inp = $('#certMailIn');
-  inp.value = ''; inp.classList.toggle('hidden', isEmail(to));
-  btn.classList.remove('hidden');
-  if (!isEmail(to)) {                                          // 명단에 이메일이 없으면 그 자리에서 입력
-    const noEmailInList = !state.applicants.some(a => a.email);
-    $('#certMailTo').textContent = rec.proxyName ? '대리인 이메일 주소를 입력해 주세요.' : noEmailInList
-      ? '명단에 이메일 정보가 아직 없습니다. 받을 주소를 입력해 주세요.'
-      : '등록된 이메일 주소가 없습니다. 받을 주소를 입력해 주세요.';
-  } else {
-    $('#certMailTo').textContent = rec.proxyName ? `대리인 이메일 ${maskEmail(to)} 로 보내드립니다.` : `신청 시 입력한 ${maskEmail(to)} 로 보내드립니다.`;
-  }
+  const btn = $('#btnMail'), inp = $('#certMailIn');
   btn.disabled = false;
-  btn.textContent = rec.mailedAt ? '다시 보내기' : '이메일로 받기';
-  if (rec.mailedAt) $('#certMailMsg').innerHTML = `<div class="msg ok">${esc(rec.mailedAt)}에 보냈습니다.</div>`;
+  if (rec.mailWant) {
+    inp.classList.add('hidden');
+    $('#certMailTo').innerHTML = `<b style="color:var(--ok)">✓ 신청되었습니다.</b> 행사 종료 후 ${esc(maskEmail(rec.mailWant))} 로 보내드립니다.`;
+    btn.textContent = '신청 취소'; btn.classList.remove('primary');
+    return;
+  }
+  btn.textContent = '이메일로 받기'; btn.classList.add('primary');
+  inp.value = ''; inp.classList.toggle('hidden', isEmail(to));
+  $('#certMailTo').textContent = isEmail(to)
+    ? `행사 종료 후 ${rec.proxyName ? '대리인 이메일 ' : '신청 시 입력한 '}${maskEmail(to)} 로 보내드립니다.`
+    : '받을 이메일 주소를 입력해 주시면 행사 종료 후 보내드립니다.';
 }
-async function sendCertMail() {
+async function requestCertMail() {
   const rec = state.mailRec;
   if (!rec) return;
-  const btn = $('#btnMail');
-  let to = certEmailOf(rec);
-  if (!isEmail(to)) {
-    to = $('#certMailIn').value.trim();
-    if (!isEmail(to)) { $('#certMailMsg').innerHTML = '<div class="msg err">이메일 주소를 정확히 입력해 주세요.</div>'; return; }
-    rec.email = to;                                            // 입력한 주소를 이 참석 기록에 저장
-  }
-  const s = state.settings, info = sessionInfo(rec.session);
-  const op = {
-    action: 'sendCert', to, name: certName(rec), receiptNo: rec.receiptNo,
-    eventName: s.eventName, sessionName: sessName(rec.session), date: info.date, place: info.place, sender: s.issuer,
-    img: $('#certImg').src, link: certLink(rec), ts: Date.now(),
-  };
-  btn.disabled = true; btn.textContent = '보내는 중…';
-  const msg = (t, c) => { $('#certMailMsg').innerHTML = `<div class="msg ${c}">${t}</div>`; };
-  try {
-    const r = await api(op);
-    if (r.ok) {
-      rec.mailedAt = fmt(new Date());
-      await DB.put('attend', rec).catch(() => {});
-      btn.textContent = '다시 보내기'; btn.disabled = false;
-      return msg('이메일을 보냈습니다. 받은편지함(또는 스팸함)을 확인해 주세요.', 'ok');
+  if (rec.mailWant) {                                          // 신청 취소
+    delete rec.mailWant; delete rec.mailReqAt;
+  } else {
+    let to = certEmailOf(rec);
+    if (!isEmail(to)) {
+      to = $('#certMailIn').value.trim();
+      if (!isEmail(to)) { $('#certMailMsg').innerHTML = '<div class="msg err">이메일 주소를 정확히 입력해 주세요.</div>'; return; }
     }
-    btn.disabled = false; btn.textContent = '이메일로 받기';
-    if (r.error === 'quota') return msg('오늘 보낼 수 있는 메일 수를 모두 사용했습니다. QR로 받아 주세요.', 'err');
-    if (r.error === 'action') return msg('메일 기능이 아직 설정되지 않았습니다. 관리자에게 문의해 주세요. (Apps Script 업데이트 필요)', 'err');
-    return msg('보내지 못했습니다: ' + esc(r.error || ''), 'err');
-  } catch (e) {
-    if (e.fatal) { btn.disabled = false; return msg(esc(e.message), 'err'); }
-    state.outbox.push(op);                                     // 인터넷이 끊기면 연결될 때 보냄
-    await DB.set('outbox', state.outbox).catch(() => {});
-    updateSyncUi();
-    btn.textContent = '전송 대기 중';
-    return msg('인터넷 연결이 불안정해 연결되면 자동으로 보냅니다. QR로도 바로 받을 수 있어요.', 'warn');
+    rec.mailWant = to; rec.mailReqAt = fmt(new Date());
   }
+  state.attend.set(rec.id, rec);
+  await DB.put('attend', rec).catch(() => {});
+  queue({ action: 'checkin', rec });                           // 같은 참석 기록을 갱신 (시트에도 반영)
+  renderCertMail(rec);
+  if (!rec.mailWant) $('#certMailMsg').innerHTML = '<div class="msg warn">이메일 받기 신청을 취소했습니다.</div>';
 }
 
 function randTk() {                                  // 휴대폰 확인증에서 서명을 불러올 때 쓰는 기록별 열쇠
@@ -1358,17 +1338,19 @@ function renderList() {
   const all = buildRoster(code).filter(r => kind === 'all' || catOf(r) === kind);
   const nIn = all.filter(r => r.rec).length;
   $('#fAll').textContent = all.length; $('#fIn').textContent = nIn; $('#fOut').textContent = all.length - nIn;
+  $('#fMail').textContent = all.filter(r => r.rec && r.rec.mailWant).length;
   document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === state.listFilter));
 
   const q = $('#listSearch').value.trim().toLowerCase();
   const rows = all.map((r, i) => ({ ...r, no: i + 1 }))
-    .filter(r => state.listFilter === 'all' || (state.listFilter === 'in' ? r.rec : !r.rec))
+    .filter(r => state.listFilter === 'all' || (state.listFilter === 'mail' ? r.rec && r.rec.mailWant : state.listFilter === 'in' ? r.rec : !r.rec))
     .filter(r => !q || [r.a.name, r.a.org, r.a.specOrg, r.a.receiptNo, r.a.projectNo].some(v => String(v || '').toLowerCase().includes(q)));
 
   $('#listBody').innerHTML = rows.length ? rows.map(r => {
     const c = catOf(r);
     const px = r.rec && r.rec.proxyName ? `<span class="pill warn">대리 참석</span> <span class="muted" style="font-size:12px">${esc(r.rec.proxyName)} · ${esc(maskPhone(r.rec.proxyPhone))}</span> ` : '';
-    const note = px + (c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>` : !r.walkin || c === 'walkin' ? ''
+    const ml = r.rec && r.rec.mailWant ? `<span class="pill ok">이메일 희망</span> <span style="font-size:12px">${esc(r.rec.mailWant)}</span> ` : '';
+    const note = ml + px + (c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>` : !r.walkin || c === 'walkin' ? ''
       : `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>`);
     let action = '';
     if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
@@ -1387,12 +1369,25 @@ function exportCsv() {
   const all = buildRoster(code);
   if (!all.length) return alert('이 회차의 명단이 없습니다.');
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
-  const head = ['No', '참석 회차', '구분', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '비고', '데스크'];
+  const head = ['No', '참석 회차', '구분', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '이메일 희망', '비고', '데스크'];
   const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), CAT_LABEL[catOf(r)], r.a.receiptNo, catOf(r) === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name + rosterName(r.rec), r.a.org, r.a.specOrg || '', r.a.projectNo,
-    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', [(r.walkin || catOf(r) === 'over') ? sourceLabel(r) + (r.rec ? ' · 관리자 승인' : '') : '',
+    normPhone(r.a.phone), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.rec && r.rec.mailWant ? r.rec.mailWant : '', [(r.walkin || catOf(r) === 'over') ? sourceLabel(r) + (r.rec ? ' · 관리자 승인' : '') : '',
       r.rec && r.rec.proxyName ? `대리 참석: ${r.rec.proxyName} (${normPhone(r.rec.proxyPhone)})` : ''].filter(Boolean).join(' / '), r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
+}
+
+// 이메일 희망자 명단: 행사 후 일괄 발송용 (확인증 링크 포함 → 링크만 보내도 서명·자료·설문까지 열림)
+function exportMailCsv() {
+  const code = state.listSession;
+  const list = buildRoster(code).filter(r => r.rec && r.rec.mailWant);
+  if (!list.length) return alert('이메일 받기를 신청한 참석자가 없습니다.');
+  const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+  const head = ['No', '참석 회차', '구분', '접수번호', '성명(확인증 표기)', '연구개발기관명', '이메일', '신청 시각', '참석시각', '확인증 링크'];
+  const rows = list.map((r, i) => [i + 1, sessLabel(r.sess), CAT_LABEL[catOf(r)], r.a.receiptNo, certName(r.rec), r.a.org,
+    r.rec.mailWant, r.rec.mailReqAt || '', r.rec.checkinAt, certLink(r.rec)]);
+  download(`이메일희망자_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
+    '\ufeff' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 }
 
 function exportRoster() {
@@ -1658,7 +1653,7 @@ $('#btnBack').addEventListener('click', () => { state.current = null; go('view-l
 $('#btnClear').addEventListener('click', sizeSig);
 $('#btnSubmit').addEventListener('click', submitCheckin);
 $('#btnWalkin').addEventListener('click', submitWalkin);
-$('#btnMail').addEventListener('click', sendCertMail);
+$('#btnMail').addEventListener('click', requestCertMail);
 $('#view-walkin').addEventListener('input', () => { $('#walkinMsg').innerHTML = ''; });
 $('#btnSyncSave').addEventListener('click', saveSync);
 $('#btnSyncOff').addEventListener('click', disconnectSync);
@@ -1670,6 +1665,7 @@ $('#listSearch').addEventListener('input', renderList);
 $('#listKind').addEventListener('change', renderList);
 $('#btnCsv').addEventListener('click', exportCsv);
 $('#btnRoster').addEventListener('click', exportRoster);
+$('#btnMailCsv').addEventListener('click', exportMailCsv);
 $('#btnReset').addEventListener('click', resetAll);
 $('#btnResetSheet').addEventListener('click', resetSheet);
 $('#btnImport').addEventListener('click', importApplicants);
