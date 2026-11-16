@@ -358,7 +358,7 @@
           <button type="button" data-filter="all">전체 <span id="fAll">0</span></button>
           <button type="button" data-filter="in">참석 <span id="fIn">0</span></button>
           <button type="button" data-filter="out">미참석 <span id="fOut">0</span></button>
-          <button type="button" data-filter="mail">이메일 희망 <span id="fMail">0</span></button>
+          <button type="button" data-filter="mail">이메일 신청 <span id="fMail">0</span></button>
         </div>
         <select id="listKind" style="width:auto">
           <option value="all">구분 전체</option><option value="in">정원 내</option><option value="over">신청대기</option><option value="walkin">현장접수</option>
@@ -1349,7 +1349,7 @@ function renderList() {
   $('#listBody').innerHTML = rows.length ? rows.map(r => {
     const c = catOf(r);
     const px = r.rec && r.rec.proxyName ? `<span class="pill warn">대리 참석</span> <span class="muted" style="font-size:12px">${esc(r.rec.proxyName)} · ${esc(maskPhone(r.rec.proxyPhone))}</span> ` : '';
-    const ml = r.rec && r.rec.mailWant ? `<span class="pill ok">이메일 희망</span> <span style="font-size:12px">${esc(r.rec.mailWant)}</span> ` : '';
+    const ml = r.rec && r.rec.mailWant ? `<span class="pill ok">참석 확인증 이메일 신청</span> <span style="font-size:12px">${esc(r.rec.mailWant)}</span> ` : '';
     const note = ml + px + (c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>` : !r.walkin || c === 'walkin' ? ''
       : `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>`);
     let action = '';
