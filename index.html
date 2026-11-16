@@ -374,7 +374,7 @@
       <div class="actions">
         <button type="button" id="btnCsv">참석자 명단 CSV 저장</button>
         <button type="button" id="btnRoster">서명 참석자 명단 저장</button>
-        <button type="button" id="btnMailCsv">이메일 희망자 명단 저장</button>
+        <button type="button" id="btnMailCsv">참석 확인증 이메일 신청자 명단 저장</button>
       </div>
     </div>
   </section>
@@ -1353,7 +1353,7 @@ function renderList() {
     const note = ml + px + (c === 'over' ? `<span class="muted" style="font-size:13px">${esc(sourceLabel(r))}</span>` : !r.walkin || c === 'walkin' ? ''
       : `<span class="pill warn">타 회차 승인</span> <span class="muted" style="font-size:12px">${esc(sessLabel(r.a.session))}</span>`);
     let action = '';
-    if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">확인증</button>
+    if (r.rec) action = `<button type="button" class="small" data-cert="${esc(r.rec.id)}">참석 확인증</button>
                          <button type="button" class="small danger" data-del="${esc(r.rec.id)}">삭제</button>`;
     else if (r.sess === today()) action = `<button type="button" class="small" data-open-admin="${esc(r.a.receiptNo)}">접수 처리</button>`;
     return `<tr class="${r.rec ? '' : 'absent'}">
