@@ -1367,8 +1367,8 @@ function renderList() {
 // 엑셀이 숫자로 바꾸지 않게(앞자리 0 유지) 텍스트로 고정: ="010..." 형식
 const asText = v => (v === undefined || v === null || v === '') ? '' : `="${String(v).replace(/"/g, '""')}"`;
 
-// 명단 이메일: 확인증 메일 신청 주소 > 대리인 이메일 > 신청 시 이메일
-const rosterEmail = r => (r.rec && (r.rec.mailWant || (r.rec.proxyName && r.rec.proxyEmail))) || r.a.email || (r.rec && r.rec.email) || '';
+// 명단 이메일: 신청자 본인 주소 (대리 참석이면 원래 신청자 주소, 대리인 주소는 비고에)
+const rosterEmail = r => (r.rec && r.rec.proxyName) ? (r.a.email || '') : ((r.rec && r.rec.mailWant) || r.a.email || (r.rec && r.rec.email) || '');
 
 function exportCsv() {
   const code = state.listSession;
