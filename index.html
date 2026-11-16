@@ -1389,9 +1389,9 @@ function exportMailCsv() {
   const list = buildRoster(code).filter(r => r.rec && r.rec.mailWant);
   if (!list.length) return alert('이메일 받기를 신청한 참석자가 없습니다.');
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
-  const head = ['No', '참석 회차', '구분', '접수번호', '성명(확인증 표기)', '연구개발기관명', '이메일', '신청 시각', '참석시각', '확인증 링크'];
+  const head = ['No', '참석 회차', '구분', '접수번호', '성명(확인증 표기)', '연구개발기관명', '참석증 수신 이메일', '참석시각', '확인증 링크'];
   const rows = list.map((r, i) => [i + 1, sessLabel(r.sess), CAT_LABEL[catOf(r)], r.a.receiptNo, certName(r.rec), r.a.org,
-    r.rec.mailWant, r.rec.mailReqAt || '', r.rec.checkinAt, certLink(r.rec)]);
+    r.rec.mailWant, r.rec.checkinAt, certLink(r.rec)]);
   download(`이메일희망자_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '\ufeff' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 }
