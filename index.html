@@ -1367,14 +1367,17 @@ function renderList() {
 // 엑셀이 숫자로 바꾸지 않게(앞자리 0 유지) 텍스트로 고정: ="010..." 형식
 const asText = v => (v === undefined || v === null || v === '') ? '' : `="${String(v).replace(/"/g, '""')}"`;
 
+// 명단 이메일: 확인증 메일 신청 주소 > 대리인 이메일 > 신청 시 이메일
+const rosterEmail = r => (r.rec && (r.rec.mailWant || (r.rec.proxyName && r.rec.proxyEmail))) || r.a.email || (r.rec && r.rec.email) || '';
+
 function exportCsv() {
   const code = state.listSession;
   const all = buildRoster(code);
   if (!all.length) return alert('이 회차의 명단이 없습니다.');
   const cell = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
-  const head = ['No', '참석 회차', '구분', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '참석여부', '참석시각', '참석확인증 이메일 발송', '비고', '데스크'];
+  const head = ['No', '참석 회차', '구분', '접수번호', '신청 회차', '성명', '연구개발기관명', '전문기관명', '과제번호', '휴대폰번호', '이메일', '참석여부', '참석시각', '참석확인증 이메일 발송', '비고', '데스크'];
   const rows = all.map((r, i) => [i + 1, sessLabel(r.sess), CAT_LABEL[catOf(r)], r.a.receiptNo, catOf(r) === 'walkin' ? '현장 신청' : sessLabel(r.a.session), r.a.name + rosterName(r.rec), r.a.org, r.a.specOrg || '', asText(r.a.projectNo),
-    asText(normPhone(r.a.phone)), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.rec && r.rec.mailWant ? 'Y' : 'N', [r.rec && r.rec.mailWant ? r.rec.mailWant : '', (r.walkin || catOf(r) === 'over') ? sourceLabel(r) + (r.rec ? ' · 관리자 승인' : '') : '',
+    asText(normPhone(r.a.phone)), rosterEmail(r), r.rec ? '참석' : '미참석', r.rec ? r.rec.checkinAt : '', r.rec && r.rec.mailWant ? 'Y' : 'N', [(r.walkin || catOf(r) === 'over') ? sourceLabel(r) + (r.rec ? ' · 관리자 승인' : '') : '',
       r.rec && r.rec.proxyName ? `대리 참석: ${r.rec.proxyName} (${normPhone(r.rec.proxyPhone)})` : ''].filter(Boolean).join(' / '), r.rec ? r.rec.desk : '']);
   download(`참석자명단_${code === 'ALL' ? '전체회차' : sessName(code) || code}_${fileStamp()}.csv`,
     '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
