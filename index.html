@@ -1245,14 +1245,14 @@ function renderCertMail(rec) {
   btn.disabled = false;
   if (rec.mailWant) {
     inp.classList.add('hidden');
-    $('#certMailTo').innerHTML = `<b style="color:var(--ok)">✓ 신청되었습니다.</b> 행사 종료 후 ${esc(maskEmail(rec.mailWant))} 로 보내드립니다.`;
+    $('#certMailTo').innerHTML = `<b style="color:var(--ok)">✓ 신청되었습니다.</b> 행사 종료 후 ${esc(rec.mailWant)} 로 보내드립니다.`;
     btn.textContent = '신청 취소'; btn.classList.remove('primary');
     return;
   }
   btn.textContent = '이메일로 받기'; btn.classList.add('primary');
   inp.value = ''; inp.classList.toggle('hidden', isEmail(to));
   $('#certMailTo').textContent = isEmail(to)
-    ? `행사 종료 후 ${rec.proxyName ? '대리인 이메일 ' : '신청 시 입력한 '}${maskEmail(to)} 로 보내드립니다.`
+    ? `행사 종료 후 ${rec.proxyName ? '대리인 이메일 ' : '신청 시 입력한 '}${to} 로 보내드립니다.`
     : '받을 이메일 주소를 입력해 주시면 행사 종료 후 보내드립니다.';
 }
 async function requestCertMail() {
