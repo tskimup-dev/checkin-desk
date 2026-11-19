@@ -493,6 +493,18 @@
   </div>
 </div>
 
+<!-- 농림식품기술기획평가원 과제 참석자 안내 (서명 후, 확인증 전에) -->
+<div id="consultModal" class="modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="consultTitle">
+  <div class="modal-card center" style="max-width:460px;word-break:keep-all">
+    <div style="font-size:40px;line-height:1">📢</div>
+    <h2 id="consultTitle" style="margin:8px 0 12px">컨설팅 대면 상담 안내</h2>
+    <p style="margin:0 0 10px;font-size:17px;line-height:1.6">회계법인 연구비 컨설팅 담당자와 <b>대면 상담이 예정</b>되어 있습니다.<br>
+      설명회 종료 후 <b>자리에 대기</b>하여 주시기 바랍니다.</p>
+    <p style="margin:0;font-size:15px;line-height:1.6;color:var(--err)">종료 후 컨설팅 참석이 어려운 경우<br>접수데스크에 사전 안내 바랍니다.</p>
+    <button type="button" class="primary big" id="consultOk" style="width:100%;margin-top:18px">예</button>
+  </div>
+</div>
+
 <div id="pinModal" class="modal hidden">
   <div class="modal-card">
     <h2 id="pinTitle">관리자 확인</h2>
@@ -1157,7 +1169,18 @@ async function submitCheckin() {
   state.current = null;
   btn.disabled = false;
   refreshHeader();
+  if (isConsultAgency(a.specOrg)) await consultNotice();       // 농림식품기술기획평가원: 상담 안내 후 확인증
   showCert(rec);
+}
+// 대면 컨설팅 대상 전문기관
+const isConsultAgency = v => /농림식품기술기획평가원|IPET/i.test(String(v || ''));
+function consultNotice() {
+  return new Promise(res => {
+    const m = $('#consultModal'), ok = $('#consultOk');
+    m.classList.remove('hidden');
+    setTimeout(() => ok.focus(), 30);
+    ok.onclick = () => { m.classList.add('hidden'); ok.onclick = null; res(); };
+  });
 }
 
 /* ===================== 참석확인증 (이미지) ===================== */
